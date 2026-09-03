@@ -403,6 +403,168 @@ async def pixaroma_version(request):
     return web.json_response({"version": _read_pixaroma_version()})
 
 
+_PROMPT_LIBRARY_DIRNAME = os.path.join("pixaroma", "prompt-tags")
+_PROMPT_LIBRARY_LOCK = threading.RLock()
+
+
+def _prompt_library_paths(request):
+    user_root = PromptServer.instance.user_manager.get_request_user_filepath(request, None)
+    if not user_root:
+        return None, None
+    root = os.path.join(user_root, _PROMPT_LIBRARY_DIRNAME)
+    return root, os.path.join(root, "manifest.json")
+
+
+def _prompt_category_file(name):
+    digest = hashlib.sha256(name.casefold().encode("utf-8")).hexdigest()[:16]
+    return "category-{}.json".format(digest)
+
+
+def _prompt_clio_file(name):
+    slug = re.sub(r"[^a-z0-9]+", "-", name.casefold()).strip("-")
+    return "clio-{}.json".format(slug)
+
+
+def _prompt_read_legacy(request):
+    path = PromptServer.instance.user_manager.get_request_user_filepath(
+        request, "comfy.settings.json", create_dir=False
+    )
+    if not path or not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            settings = json.load(f)
+        raw = settings.get("Pixaroma.Prompt.Library")
+        return json.loads(raw) if isinstance(raw, str) else raw
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def _prompt_clear_legacy(request):
+    path = PromptServer.instance.user_manager.get_request_user_filepath(
+        request, "comfy.settings.json", create_dir=False
+    )
+    if not path or not os.path.isfile(path):
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        settings = json.load(f)
+    if "Pixaroma.Prompt.Library" not in settings:
+        return
+    del settings["Pixaroma.Prompt.Library"]
+    temp = path + ".pixaroma.tmp"
+    with open(temp, "w", encoding="utf-8") as f:
+        json.dump(settings, f, ensure_ascii=False, indent=4)
+    os.replace(temp, path)
+
+
+def _prompt_read_files(root, manifest_path):
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+    categories = manifest.get("categories", [])
+    tags = []
+    for category in categories:
+        filename = _prompt_clio_file(category)
+        path = os.path.join(root, filename)
+        if not os.path.isfile(path):
+            filename = _prompt_category_file(category)
+            path = os.path.join(root, filename)
+        if os.path.isfile(path):
+            with open(path, "r", encoding="utf-8") as f:
+                rows = json.load(f)
+            if isinstance(rows, list):
+                tags.extend(dict(tag, cat=category) for tag in rows if isinstance(tag, dict))
+    uncategorized = os.path.join(root, "uncategorized.json")
+    if os.path.isfile(uncategorized):
+        with open(uncategorized, "r", encoding="utf-8") as f:
+            rows = json.load(f)
+        if isinstance(rows, list):
+            tags.extend(tag for tag in rows if isinstance(tag, dict))
+    return {
+        "version": 1,
+        "categories": categories,
+        "listCats": manifest.get("listCats", []),
+        "catModes": manifest.get("catModes", {}),
+        "tags": tags,
+    }
+
+
+def _prompt_write_files(root, library):
+    os.makedirs(root, exist_ok=True)
+    categories = library.get("categories", [])
+    by_category = {category: [] for category in categories}
+    uncategorized = []
+    for tag in library.get("tags", []):
+        if not isinstance(tag, dict):
+            continue
+        copy = dict(tag)
+        category = copy.pop("cat", "")
+        if category in by_category:
+            by_category[category].append(copy)
+        else:
+            uncategorized.append(copy)
+
+    expected = {"manifest.json", "uncategorized.json"}
+    for category, tags in by_category.items():
+        filename = _prompt_clio_file(category)
+        if not os.path.isfile(os.path.join(root, filename)):
+            filename = _prompt_category_file(category)
+        expected.add(filename)
+        with open(os.path.join(root, filename), "w", encoding="utf-8") as f:
+            json.dump(tags, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(root, "uncategorized.json"), "w", encoding="utf-8") as f:
+        json.dump(uncategorized, f, ensure_ascii=False, indent=2)
+    manifest = {
+        "version": 1,
+        "categories": categories,
+        "listCats": library.get("listCats", []),
+        "catModes": library.get("catModes", {}),
+    }
+    with open(os.path.join(root, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
+    for filename in os.listdir(root):
+        if filename.endswith(".json") and filename not in expected:
+            try:
+                os.remove(os.path.join(root, filename))
+            except OSError:
+                pass
+
+
+@PromptServer.instance.routes.get("/pixaroma/api/prompt/library")
+async def prompt_library_get(request):
+    try:
+        with _PROMPT_LIBRARY_LOCK:
+            root, manifest_path = _prompt_library_paths(request)
+            if not root:
+                return web.json_response({"error": "invalid user"}, status=403)
+            if not os.path.isfile(manifest_path):
+                legacy = _prompt_read_legacy(request)
+                if legacy is not None:
+                    _prompt_write_files(root, legacy)
+                    _prompt_clear_legacy(request)
+                    return web.json_response(_prompt_read_files(root, manifest_path))
+                return web.json_response(None)
+            return web.json_response(_prompt_read_files(root, manifest_path))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return web.json_response({"error": "could not read prompt library"}, status=500)
+
+
+@PromptServer.instance.routes.post("/pixaroma/api/prompt/library")
+async def prompt_library_post(request):
+    try:
+        library = await request.json()
+        if not isinstance(library, dict):
+            raise ValueError
+        with _PROMPT_LIBRARY_LOCK:
+            root, _ = _prompt_library_paths(request)
+            if not root:
+                return web.json_response({"error": "invalid user"}, status=403)
+            _prompt_write_files(root, library)
+        return web.json_response({"ok": True})
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return web.json_response({"error": "could not write prompt library"}, status=400)
+
+
+
 @PromptServer.instance.routes.get("/pixaroma/api/sounds")
 async def pixaroma_sounds(request):
     """List the chime/notification sounds in assets/sounds/.

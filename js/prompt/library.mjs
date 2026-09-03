@@ -8,9 +8,8 @@
 //     updating / reinstalling the Pixaroma plugin (the user's #1 ask);
 //   * is private to the user - it is NEVER written into a workflow, so a shared
 //     workflow keeps the author's prompts to themselves;
-//   * persists even though it is not declared in any extension's settings[]
-//     (Vue Compat #20: comfy.settings.json is a plain JSON merge, no allow-list).
-//     Same mechanism Seed history + Node Colors favorites use.
+//   * is served by Pixaroma's local API and stored as readable JSON files outside
+//     the plugin folder, so it survives plugin updates and remains easy to edit.
 //
 // tags are kept newest-first (new ones are unshifted on). categories are ordered
 // and may be empty.
@@ -32,7 +31,8 @@
 import { app } from "/scripts/app.js";
 import { cleanMode, DEFAULT_MODE, resetCursor, listKey } from "./cursors.mjs";
 
-const LIBRARY_SETTING = "Pixaroma.Prompt.Library";
+const LIBRARY_API = "/pixaroma/api/prompt/library";
+const LEGACY_LIBRARY_SETTING = "Pixaroma.Prompt.Library";
 export const NAME_RE = /[^a-zA-Z0-9_\-]/g;
 // The two implicit buckets for a tag with no category, one per side.
 export const TEXT_BUCKET = "Text";
@@ -66,6 +66,14 @@ const _subs = new Set();
 function settingsApi() {
   const s = app.ui?.settings;
   return s && typeof s.getSettingValue === "function" ? s : null;
+}
+
+function readFileLibrary() {
+  const xhr = new XMLHttpRequest();
+  xhr.open("GET", LIBRARY_API, false);
+  xhr.send();
+  if (xhr.status !== 200) throw new Error(`Prompt library GET failed: ${xhr.status}`);
+  return xhr.responseText ? JSON.parse(xhr.responseText) : null;
 }
 
 // Only a real string (or a number, which hand-edited JSON produces) can NAME a thing.
@@ -196,29 +204,36 @@ function normalize(raw) {
 }
 
 function persist(data) {
-  const s = app.ui?.settings;
-  if (!s) return;
-  const json = JSON.stringify(data);
-  try {
-    if (typeof s.setSettingValueAsync === "function") s.setSettingValueAsync(LIBRARY_SETTING, json);
-    else if (typeof s.setSettingValue === "function") s.setSettingValue(LIBRARY_SETTING, json);
-  } catch { /* non-fatal: still applied in-memory this session */ }
+  fetch(LIBRARY_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  }).catch(() => { /* non-fatal: still applied in-memory this session */ });
 }
 
 // The live library { categories, tags }. Same cached instance between reads; go
 // through setLibrary / commitLibrary to mutate so subscribers + storage stay synced.
 export function getLibrary() {
   if (_data) return _data;
+  try {
+    const raw = readFileLibrary();
+    if (raw != null) {
+      _data = normalize(raw);
+      return _data;
+    }
+  } catch { /* fall through to the legacy settings store */ }
+
   const s = settingsApi();
   if (!s) return normalize(SEED); // settings not ready yet: don't cache the seed
-  const raw = s.getSettingValue(LIBRARY_SETTING);
+  const raw = s.getSettingValue(LEGACY_LIBRARY_SETTING);
   if (raw == null) {
     _data = normalize(SEED);
-    persist(_data); // lock the seed in so it's immediately editable
+    persist(_data); // create the file store for a new user
     return _data;
   }
   try {
     _data = normalize(typeof raw === "string" ? JSON.parse(raw) : raw);
+    persist(_data); // migrate a legacy browser/settings library to files
   } catch {
     _data = normalize({});
   }
@@ -420,7 +435,7 @@ export function setLibrary(data) {
 }
 
 // Live edit: update cache + notify subscribers now (nodes re-highlight/preview as
-// you type), DEBOUNCE the settings write so we don't hammer comfy.settings.json.
+// you type), DEBOUNCE the file write so we do not write on every keystroke.
 export function commitLibrary(data) {
   _data = normalize(data);
   fanout();

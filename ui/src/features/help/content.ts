@@ -1,3 +1,5 @@
+import helpDocuments from "virtual:pixaroma-help-documents";
+
 export type HelpKind = "guide" | "node" | "canvas";
 
 export type HelpSection = {
@@ -26,8 +28,6 @@ export type HelpEntry = {
 };
 
 type RawDocument = { path: string; source: string };
-
-declare const __PIXAROMA_HELP_DOCUMENTS__: RawDocument[];
 
 function scalar(value: string) {
   const text = value.trim();
@@ -102,7 +102,7 @@ export function parseHelpDocument(document: RawDocument): HelpEntry {
   };
 }
 
-export function loadHelpDocuments(documents = __PIXAROMA_HELP_DOCUMENTS__) {
+export function loadHelpDocuments(documents: RawDocument[] = helpDocuments) {
   const entries = documents.map(parseHelpDocument).sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
   const ids = new Set<string>();
   for (const entry of entries) { if (ids.has(entry.id)) throw new Error(`duplicate help id: ${entry.id}`); ids.add(entry.id); }

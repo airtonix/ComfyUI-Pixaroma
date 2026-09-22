@@ -12,13 +12,19 @@ export type MountOptions = {
 };
 
 export type PromptLibraryMountOptions = Omit<PromptLibraryAdapterOptions, "baseUrl"> & {
-  baseUrl: string;
+  baseUrl?: string;
+  accent?: string;
+  prefill?: string;
+  initialId?: string;
   initialLibrary?: PromptLibraryData;
+  onInsert?: (value: string, symbol: "@" | "#") => void;
+  onClose?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 export type PixaromaReactUi = {
   mountHelpBrowser(container: HTMLElement, entries: HelpEntry[], options?: MountOptions): () => void;
-  mountPromptLibrary(container: HTMLElement, options: PromptLibraryMountOptions): () => void;
+  mountPromptLibrary(container: HTMLElement, options?: PromptLibraryMountOptions): () => void;
 };
 
 type MountCleanup = () => void;
@@ -88,12 +94,12 @@ export const pixaromaReactUi: PixaromaReactUi = {
       </WidgetBrowser>,
     );
   },
-  mountPromptLibrary(container, options) {
-    const { initialLibrary, ...adapterOptions } = options;
-    const adapter = createPromptLibraryAdapter(adapterOptions);
+  mountPromptLibrary(container, options = {}) {
+    const { initialLibrary, baseUrl, accent, prefill, initialId, onInsert, onClose, onDirtyChange, ...adapterOptions } = options;
+    const adapter = createPromptLibraryAdapter({ ...adapterOptions, baseUrl });
     return mountReact(
       container,
-      <WidgetBrowser defaultWidget="prompt-library" widgetProps={{ "prompt-library": { adapter, initialLibrary } }}>
+      <WidgetBrowser defaultWidget="prompt-library" widgetProps={{ "prompt-library": { adapter, initialLibrary, accent, prefill, initialId, onInsert, onClose, onDirtyChange } }}>
         <WidgetBrowser.Sidebar>
           <WidgetBrowser.SidebarItem widget="prompt-library" />
         </WidgetBrowser.Sidebar>

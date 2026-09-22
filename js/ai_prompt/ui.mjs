@@ -32,7 +32,7 @@ import {
   acKeydown, backdropHTML, closeAC, injectTagCSS, insertTagAt,
   maybeAC, syncColumns,
 } from "../prompt/tag_field.mjs";
-import { openLibraryEditor, closeLibraryEditorFor } from "../prompt/library_editor.mjs";
+import { openReactLibraryEditor, closeReactLibraryEditorFor } from "../prompt/react_library_editor.mjs";
 import {
   IDEA_SHARE_DEFAULT,
   IDEA_SHARE_MAX,
@@ -337,7 +337,7 @@ export function applyShare(node) {
  * optional prefill and an onInsert.
  */
 export function openTagLibrary(node, ideaEl, ctx) {
-  openLibraryEditor(node, {
+  openReactLibraryEditor(node, {
     accent: accentOf(node),
     // `sym` is "#" for a List tag (roll one line) and "@" for a snippet - the editor
     // decides from the card's own kind so Insert drops in the useful form.
@@ -683,7 +683,7 @@ export function destroyFace(node) {
   // The autocomplete popup and the library are body-level singletons, so a deleted
   // node must take its own down or they hang there pointing at nothing.
   try { closeAC(); } catch (e) { /* gone */ }
-  try { closeLibraryEditorFor(node); } catch (e) { /* gone */ }
+  try { closeReactLibraryEditorFor(node); } catch (e) { /* gone */ }
   const widget = node?._pixApWidget;
   if (widget && Array.isArray(node.widgets)) {
     const at = node.widgets.indexOf(widget);

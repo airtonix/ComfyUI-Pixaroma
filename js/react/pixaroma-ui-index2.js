@@ -1,0 +1,3 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["./pixaroma-ui-PromptLibrary.js","./pixaroma-ui.js","./pixaroma-ui-index.css","./pixaroma-ui-input.js"])))=>i.map(i=>d[i]);
+import{j as t,r as o,_ as a}from"./pixaroma-ui.js";import{c as s}from"./pixaroma-ui.js";import"/scripts/api.js";const i=o.lazy(()=>a(()=>import("./pixaroma-ui-PromptLibrary.js"),__vite__mapDeps([0,1,2,3]),import.meta.url).then(r=>({default:r.PromptLibrary}))),m={id:"prompt-library",label:"Prompt Library",icon:"▤",order:20,requires:["prompt-library-api"],loadingFallback:t.jsx("div",{className:"px-widget-loading",children:"Loading Prompt Library…"}),component:i};export{s as createPromptLibraryAdapter,m as widget};
+//# sourceMappingURL=pixaroma-ui-index2.js.map

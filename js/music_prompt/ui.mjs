@@ -29,7 +29,7 @@ import {
   acKeydown, backdropHTML, closeAC, injectTagCSS, insertTagAt,
   maybeAC, syncColumns,
 } from "../prompt/tag_field.mjs";
-import { openLibraryEditor, closeLibraryEditorFor } from "../prompt/library_editor.mjs";
+import { openReactLibraryEditor, closeReactLibraryEditorFor } from "../prompt/react_library_editor.mjs";
 import { applyAdaptiveCanvasOnly } from "../shared/nodes2.mjs";
 import { installCanvasZoomPassthrough } from "../shared/canvas_zoom.mjs";
 import { installNativeTextMenu } from "../shared/native_text_menu.mjs";
@@ -416,7 +416,7 @@ export function applyShare(node) {
  * optional prefill and an onInsert.
  */
 export function openTagLibrary(node, ideaEl, ctx) {
-  openLibraryEditor(node, {
+  openReactLibraryEditor(node, {
     accent: accentOf(node),
     // `sym` is "#" for a List tag (roll one line) and "@" for a snippet - the editor
     // decides from the card's own kind so Insert drops in the useful form.
@@ -1016,7 +1016,7 @@ export function destroyFace(node) {
   // The autocomplete popup and the library are body-level singletons, so a
   // deleted node must take its own down or they hang there pointing at nothing.
   try { closeAC(); } catch (_) { /* already gone */ }
-  try { closeLibraryEditorFor(node); } catch (_) { /* already gone */ }
+  try { closeReactLibraryEditorFor(node); } catch (_) { /* already gone */ }
   node._pixMpEls = null;
   node._pixMpWidget = null;
 }

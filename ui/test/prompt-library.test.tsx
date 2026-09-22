@@ -58,6 +58,17 @@ describe("PromptLibrary", () => {
     expect(alert.textContent).toContain("name must be a string");
   });
 
+  it("uses the record kind when inserting the selected record", async () => {
+    const onInsert = vi.fn();
+    render(<PromptLibrary adapter={adapter()} onInsert={onInsert} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Subjects/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Insert" }));
+    expect(onInsert).toHaveBeenLastCalledWith("subjects", "#");
+    fireEvent.click(screen.getByRole("button", { name: /Film look/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Insert" }));
+    expect(onInsert).toHaveBeenLastCalledWith("styles/cinematic", "@");
+  });
+
   it("closes after discarding a dirty draft", async () => {
     const onClose = vi.fn();
     render(<PromptLibrary adapter={adapter()} onClose={onClose} />);

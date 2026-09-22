@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { helpEntries } from "@/features/help/data";
 import { WidgetBrowser } from "@/widget-browser";
+import "@/mount";
 import "@/styles.css";
 
 const root = document.getElementById("root");

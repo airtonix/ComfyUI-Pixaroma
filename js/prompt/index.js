@@ -25,7 +25,7 @@ import {
   acKeydown, backdropHTML, closeAC, escapeHTML, injectTagCSS, insertTagAt,
   makeRunResolvers, maybeAC, paintExpanded, PREVIEW_RESOLVERS, syncColumns,
 } from "./tag_field.mjs";
-import { openLibraryEditor, closeLibraryEditorFor } from "./library_editor.mjs";
+import { openReactLibraryEditor, closeReactLibraryEditorFor } from "./react_library_editor.mjs";
 import { openPromptSettings, closePromptSettingsFor, accentOf, getDefaultOrder } from "./settings.mjs";
 
 // Prompt Pixaroma: a prompt box where @tags expand to library snippets, with an
@@ -760,7 +760,7 @@ function openTextMenu(node, x, y, text, hasSel) {
 // text so the user only types a name + picks a category + Create (the "save
 // selection as a tag" flow). Insert drops the chosen @tag back into the prompt.
 function openLibraryFor(node, prefill) {
-  openLibraryEditor(node, {
+  openReactLibraryEditor(node, {
     accent: accentOf(node),
     prefill: prefill || "",
     // `sym` is "#" for a List tag (roll one line) and "@" for a snippet - the editor
@@ -925,7 +925,7 @@ app.registerExtension({
       closeAC();
       closeDD();
       closeTextMenu();
-      closeLibraryEditorFor(this);
+      closeReactLibraryEditorFor(this);
       closePromptSettingsFor(this);
       this._pixPromptFloorOff?.(); this._pixPromptFloorOff = null;
       this._pixPromptBoxRO?.disconnect(); this._pixPromptBoxRO = null;

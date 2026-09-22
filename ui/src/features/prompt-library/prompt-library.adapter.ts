@@ -28,7 +28,7 @@ export type PromptLibraryAdapter = {
   get(id: PromptId, signal?: AbortSignal): Promise<PromptRecord>;
 };
 
-type AdapterOptions = {
+export type PromptLibraryAdapterOptions = {
   baseUrl?: string;
   fetchImpl?: PromptLibraryFetch;
 };
@@ -108,7 +108,7 @@ function normalizedLibrary(payload: unknown, route: string): PromptLibraryLoadRe
   return { library: { version: 1, prompts }, errors };
 }
 
-export function createPromptLibraryAdapter(options: AdapterOptions = {}): PromptLibraryAdapter {
+export function createPromptLibraryAdapter(options: PromptLibraryAdapterOptions = {}): PromptLibraryAdapter {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetchImpl = options.fetchImpl ?? fetch;
 

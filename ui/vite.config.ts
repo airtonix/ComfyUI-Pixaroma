@@ -62,6 +62,7 @@ export default defineConfig(({ command, mode }) => ({
     emptyOutDir: true,
     sourcemap: true,
     rollupOptions: {
+      external: ["/scripts/api.js", "/scripts/app.js"],
       input: path.resolve(rootDir, "index.html"),
       output: {
         entryFileNames: "pixaroma-ui.js",

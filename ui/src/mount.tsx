@@ -1,6 +1,8 @@
 import { StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { helpEntries, mergeRuntimeHelp, type HelpEntry } from "@/features/help/data";
+import { createPromptLibraryAdapter, type PromptLibraryAdapterOptions } from "@/features/prompt-library/prompt-library.adapter";
+import type { PromptLibrary as PromptLibraryData } from "@/features/prompt-library/prompt-library.types";
 import { WidgetBrowser } from "@/widget-browser";
 import styles from "@/styles.css?inline";
 
@@ -9,8 +11,14 @@ export type MountOptions = {
   onClose?: () => void;
 };
 
+export type PromptLibraryMountOptions = Omit<PromptLibraryAdapterOptions, "baseUrl"> & {
+  baseUrl: string;
+  initialLibrary?: PromptLibraryData;
+};
+
 export type PixaromaReactUi = {
   mountHelpBrowser(container: HTMLElement, entries: HelpEntry[], options?: MountOptions): () => void;
+  mountPromptLibrary(container: HTMLElement, options: PromptLibraryMountOptions): () => void;
 };
 
 type MountCleanup = () => void;
@@ -76,6 +84,21 @@ export const pixaromaReactUi: PixaromaReactUi = {
         </WidgetBrowser.Sidebar>
         <WidgetBrowser.Content>
           <WidgetBrowser.Sandbox widget="help" />
+        </WidgetBrowser.Content>
+      </WidgetBrowser>,
+    );
+  },
+  mountPromptLibrary(container, options) {
+    const { initialLibrary, ...adapterOptions } = options;
+    const adapter = createPromptLibraryAdapter(adapterOptions);
+    return mountReact(
+      container,
+      <WidgetBrowser defaultWidget="prompt-library" widgetProps={{ "prompt-library": { adapter, initialLibrary } }}>
+        <WidgetBrowser.Sidebar>
+          <WidgetBrowser.SidebarItem widget="prompt-library" />
+        </WidgetBrowser.Sidebar>
+        <WidgetBrowser.Content>
+          <WidgetBrowser.Sandbox widget="prompt-library" />
         </WidgetBrowser.Content>
       </WidgetBrowser>,
     );

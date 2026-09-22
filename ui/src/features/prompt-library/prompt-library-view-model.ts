@@ -92,13 +92,17 @@ export function buildPromptTree(prompts: PromptRecord[]): PromptTreeNode[] {
 
 function sortTreeNodes(nodes: PromptTreeNode[]): PromptTreeNode[] {
   return nodes
-    .map((node) => node.kind === "folder"
-      ? { ...node, folders: sortTreeNodes(node.folders), prompts: [...node.prompts].sort((a, b) => compareText(a.sortKey, b.sortKey)) }
+    .map((node): PromptTreeNode => node.kind === "folder"
+      ? { ...node, folders: sortFolders(node.folders), prompts: [...node.prompts].sort((a, b) => compareText(a.sortKey, b.sortKey)) }
       : node)
     .sort((left, right) => {
       if (left.kind !== right.kind) return left.kind === "prompt" ? -1 : 1;
       return compareText(left.sortKey, right.sortKey);
     });
+}
+
+function sortFolders(folders: PromptTreeFolder[]): PromptTreeFolder[] {
+  return sortTreeNodes(folders).filter((node): node is PromptTreeFolder => node.kind === "folder");
 }
 
 export function flattenPromptTree(tree: PromptTreeNode[]): PromptTreePrompt[] {

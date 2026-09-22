@@ -20,14 +20,16 @@
 // when the menu is not up yet, and the same silent give-up.
 
 import { app } from "/scripts/app.js";
+import "../react/pixaroma-ui.js";
 import { nodeSetting, setNodeSetting } from "../shared/index.mjs";
 import { createHelpWindow, el } from "./window.mjs";
 import { versionParts } from "../shared/version.mjs";
 import { injectHelpBrowserCSS } from "./css.mjs";
 import {
-  buildIndex, groupByCategory, renderNav, renderArticle, buildCard, pixaromaOnCanvas,
+  buildIndex, groupByCategory, renderNav, renderArticle, buildCard, pixaromaOnCanvas, safeSections,
 } from "./content.mjs";
 import { buildSearchIndex, searchIndex, highlight } from "./search.mjs";
+import { readControls } from "./controls.mjs";
 import {
   toast, flash, createNodeAt, graphPointFromClient,
   copyText, versionLine, helpAsText, openExternal, LINKS, escText,
@@ -47,6 +49,8 @@ const S = {
   hi: -1,
   filterCat: null,
   toolbarBtn: null,
+  reactRoot: null,
+  reactUnmount: null,
 };
 
 function loadPins() {
@@ -426,9 +430,62 @@ function refresh() {
   }
 }
 
+function reactEntries() {
+  return S.index.map((entry, order) => ({
+    id: entry.key,
+    kind: entry.kind,
+    title: entry.title,
+    tagline: entry.tagline || "",
+    category: entry.cat || "Other",
+    order,
+    icon: entry.icon || "?",
+    comfyClass: entry.cls,
+    tags: [entry.aliases || ""],
+    related: entry.help?.related || [],
+    sections: safeSections(entry.help).map((section) => ({
+      heading: section.heading,
+      paragraphs: section.body ? String(section.body).split(/\n\s*\n/) : [],
+      bullets: section.bullets,
+      definitions: Array.isArray(section.defs) ? section.defs.map(([term, description]) => ({ term, description })) : undefined,
+      links: Array.isArray(section.links) ? section.links.map(([label, url]) => ({ label, url })) : undefined,
+      table: section.table,
+    })),
+    footer: entry.help?.footer,
+    controls: entry.kind === "node" ? readControls(entry.cls) : undefined,
+  }));
+}
+
+function closeReactHelpBrowser() {
+  S.reactUnmount?.();
+  S.reactUnmount = null;
+  S.reactRoot?.remove();
+  S.reactRoot = null;
+  syncToolbarButton();
+}
+
+function openReactHelpBrowser(target) {
+  loadPins();
+  S.index = buildIndex();
+  const api = window.PixaromaReactUi;
+  if (!api) return false;
+  if (!S.reactRoot) {
+    S.reactRoot = document.createElement("div");
+    document.body.appendChild(S.reactRoot);
+  }
+  const hit = target && S.index.find((entry) => entry.cls === target || entry.key === target);
+  S.reactUnmount?.();
+  S.reactUnmount = api.mountHelpBrowser(S.reactRoot, reactEntries(), {
+    initialId: hit?.key,
+    onClose: closeReactHelpBrowser,
+  });
+  syncToolbarButton();
+  return true;
+}
+
 // `target` may be a node's comfyClass ("PixaromaOutpaint") or a page key
 // ("canvas:colors"), so the canvas features can link here too.
 export function openHelpBrowser(target) {
+  if (openReactHelpBrowser(target)) return;
   loadPins();
   const w = ensureWindow();
   w.open();
@@ -439,18 +496,21 @@ export function openHelpBrowser(target) {
   }
 }
 export function toggleHelpBrowser() {
-  if (S.win?.isOpen()) closeHelpBrowser();
+  if (S.reactRoot) closeReactHelpBrowser();
+  else if (S.win?.isOpen()) closeHelpBrowser();
   else openHelpBrowser();
 }
 export function closeHelpBrowser() {
-  S.win?.close();
+  if (S.reactRoot) closeReactHelpBrowser();
+  else S.win?.close();
   syncToolbarButton();
 }
 // The toolbar button shows whether the window is open, so it reads as a toggle
 // rather than a button that sometimes seems to do nothing. Called from every
 // path that opens or closes, including the window's own X.
 function syncToolbarButton() {
-  S.toolbarBtn?.classList.toggle("pixhb-btn-open", !!S.win?.isOpen());
+  const open = !!S.reactRoot || !!S.win?.isOpen();
+  S.toolbarBtn?.classList.toggle("pixhb-btn-open", open);
 }
 
 // ── the toolbar button ───────────────────────────────────────

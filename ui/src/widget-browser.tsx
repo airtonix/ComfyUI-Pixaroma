@@ -1,6 +1,6 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { Component, createContext, Suspense, useContext, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { findWidget, widgets, type WidgetDefinition } from "@/widget-registry";
+import { cleanupWidgets, findWidget, loadWidgets, widgets, type WidgetDefinition } from "@/widget-registry";
 
 type WidgetBrowserContextValue = {
   activeWidget: WidgetDefinition;
@@ -23,6 +23,17 @@ type WidgetBrowserProps = {
 };
 
 function WidgetBrowser({ defaultWidget, widgetProps = {}, children }: WidgetBrowserProps) {
+  const [loaded, setLoaded] = useState(widgets.length > 0);
+  useEffect(() => {
+    let mounted = true;
+    loadWidgets().then(() => mounted && setLoaded(true));
+    return () => {
+      mounted = false;
+      cleanupWidgets();
+    };
+  }, []);
+  if (!loaded) return <div className="px-widget-loading">Loading widgets…</div>;
+
   const initialWidget = findWidget(defaultWidget ?? "") ?? widgets[0];
   if (!initialWidget) return <div className="px-widget-empty">No Pixaroma widgets are registered.</div>;
 
@@ -53,13 +64,31 @@ function Content({ children }: { children: ReactNode }) {
   return <section className="px-widget-content">{children}</section>;
 }
 
+class WidgetErrorBoundary extends Component<{ fallback?: WidgetDefinition["errorFallback"]; children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("Pixaroma widget failed to render", error, info.componentStack);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    const { fallback } = this.props;
+    return typeof fallback === "function" ? fallback(this.state.error) : fallback ?? <div className="px-widget-error">Unable to load this widget.</div>;
+  }
+}
+
 function Sandbox({ widget }: { widget: string }) {
   const { activeWidget, widgetProps } = useWidgetBrowser();
   if (activeWidget.id !== widget) return null;
   const definition = findWidget(widget);
   if (!definition) return <div className="px-widget-empty">Unknown widget: {widget}</div>;
   const Component = definition.component;
-  return <Component {...(widgetProps[widget] ?? {})} />;
+  return <WidgetErrorBoundary fallback={definition.errorFallback}><Suspense fallback={definition.loadingFallback ?? <div className="px-widget-loading">Loading widget…</div>}><Component {...(widgetProps[widget] ?? {})} /></Suspense></WidgetErrorBoundary>;
 }
 
 WidgetBrowser.Sidebar = Sidebar;

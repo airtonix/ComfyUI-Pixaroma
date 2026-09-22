@@ -44,6 +44,8 @@ describe("PromptLibrary", () => {
     expect(screen.getByText("A film look")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Refresh prompt library" }));
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    expect(screen.getByRole("button", { name: /Film look/ }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.queryByRole("button", { name: /Soft light/ })).toBeNull();
   });
 
   it("shows the source path and message for malformed records while keeping valid prompts", async () => {

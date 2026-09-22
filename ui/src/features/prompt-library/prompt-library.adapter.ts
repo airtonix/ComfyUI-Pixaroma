@@ -5,6 +5,7 @@ import type {
 } from "./prompt-library.types";
 import { normalizePromptRecord } from "./prompt-library-markdown";
 import { pixApiUrl } from "@/adapters/comfy/assets";
+import { notifyPromptLibrary } from "./prompt-library-bridge";
 
 export type PromptLibraryFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -111,6 +112,7 @@ function normalizedLibrary(payload: unknown, route: string): PromptLibraryLoadRe
 export function createPromptLibraryAdapter(options: PromptLibraryAdapterOptions = {}): PromptLibraryAdapter {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetchImpl = options.fetchImpl ?? fetch;
+  let latestLibraryRequest = 0;
 
   async function request(route: string, init?: RequestInit): Promise<unknown> {
     const response = await fetchImpl(pixApiUrl(route), init);
@@ -124,12 +126,18 @@ export function createPromptLibraryAdapter(options: PromptLibraryAdapterOptions 
 
   return {
     async load(signal) {
+      const requestId = ++latestLibraryRequest;
       const route = baseUrl;
-      return normalizedLibrary(await request(route, { signal }), route);
+      const result = normalizedLibrary(await request(route, { signal }), route);
+      if (requestId === latestLibraryRequest) notifyPromptLibrary(result.library);
+      return result;
     },
     async refresh(signal) {
+      const requestId = ++latestLibraryRequest;
       const route = `${baseUrl}/refresh`;
-      return normalizedLibrary(await request(route, { method: "POST", signal }), route);
+      const result = normalizedLibrary(await request(route, { method: "POST", signal }), route);
+      if (requestId === latestLibraryRequest) notifyPromptLibrary(result.library);
+      return result;
     },
     async get(id, signal) {
       const route = `${baseUrl}/${encodeURIComponent(id)}`;

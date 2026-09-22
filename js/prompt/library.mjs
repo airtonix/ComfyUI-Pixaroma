@@ -33,6 +33,7 @@ import { cleanMode, DEFAULT_MODE, resetCursor, listKey } from "./cursors.mjs";
 
 const LIBRARY_API = "/pixaroma/api/prompt/library";
 const LEGACY_LIBRARY_SETTING = "Pixaroma.Prompt.Library";
+export const PROMPT_LIBRARY_UPDATED_EVENT = "pixaroma:prompt-library:updated";
 export const NAME_RE = /[^a-zA-Z0-9_\-]/g;
 // The two implicit buckets for a tag with no category, one per side.
 export const TEXT_BUCKET = "Text";
@@ -247,6 +248,45 @@ export function getLibrary() {
 // on a stale snapshot and write it straight back over the other tab's work.
 export function reloadLibrary() { _data = null; return getLibrary(); }
 
+// Convert Markdown records to the legacy selector shape. Prefix metadata stays
+// opaque because record kind defines the @ and # selector behavior.
+export function mapPromptLibrary(library) {
+  const categories = [];
+  const listCats = [];
+  const tags = [];
+  const usedNames = new Set();
+  const addCategory = (name, kind) => {
+    if (name && !categories.some((c) => lc(c) === lc(name))) categories.push(name);
+    if (kind === "list" && name && !listCats.some((c) => lc(c) === lc(name))) listCats.push(name);
+  };
+  const uniqueName = (base) => {
+    const stem = cleanName(base) || "tag";
+    let name = stem;
+    let suffix = 2;
+    while (usedNames.has(lc(name))) name = `${stem}-${suffix++}`;
+    usedNames.add(lc(name));
+    return name;
+  };
+  for (const record of (library?.prompts || [])) {
+    if (!record || (record.kind !== "text" && record.kind !== "list")) continue;
+    const category = typeof record.category === "string" ? record.category.trim() : "";
+    addCategory(category, record.kind);
+    tags.push({
+      name: uniqueName(record.name),
+      cat: category,
+      text: typeof record.body === "string" ? record.body : "",
+      ...(record.kind === "list" ? { kind: "list" } : {}),
+    });
+  }
+  return normalize({ version: 1, categories, listCats, tags });
+}
+
+export function syncPromptLibrary(library) {
+  _data = mapPromptLibrary(library);
+  fanout();
+  return _data;
+}
+
 // Would committing `data` actually change anything? Both sides are normalized first,
 // so key order and dropped defaults cannot make an identical library look different
 // (a raw JSON.stringify of a working copy always differs - `clone` and `normalize`
@@ -458,6 +498,13 @@ export function flushLibrary() {
 }
 
 export function subscribe(fn) { _subs.add(fn); return () => _subs.delete(fn); }
+
+if (typeof globalThis.addEventListener === "function") {
+  globalThis.addEventListener(PROMPT_LIBRARY_UPDATED_EVENT, (event) => {
+    const library = event?.detail?.library;
+    if (library && Array.isArray(library.prompts)) syncPromptLibrary(library);
+  });
+}
 
 // Serialize the library for a file. `cat` omitted / null = everything; otherwise
 // only that one bucket (pass TEXT_BUCKET / LIST_BUCKET for the tags with no category

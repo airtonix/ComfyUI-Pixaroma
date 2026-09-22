@@ -5,6 +5,7 @@ vi.mock("@/adapters/comfy/assets", () => ({ pixApiUrl: (route: string) => route 
 import cinematic from "./fixtures/prompt-library/styles/cinematic.md?raw";
 import subjects from "./fixtures/prompt-library/lists/subjects.md?raw";
 import { createPromptLibraryAdapter } from "@/features/prompt-library/prompt-library.adapter";
+import { PROMPT_LIBRARY_UPDATED_EVENT } from "@/features/prompt-library/prompt-library-bridge";
 import { parsePromptMarkdown } from "@/features/prompt-library/prompt-library-markdown";
 
 const library = {
@@ -28,16 +29,45 @@ describe("prompt library adapter", () => {
     expect(fetchImpl).toHaveBeenCalledWith("/pixaroma/api/prompt/library/markdown", { signal: undefined });
   });
 
-  it("refreshes from the server-authoritative Markdown endpoint", async () => {
+  it("refreshes from the server-authoritative Markdown endpoint and notifies selectors", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(response(library));
     const controller = new AbortController();
     const adapter = createPromptLibraryAdapter({ fetchImpl });
+    const notify = vi.fn();
+    window.addEventListener(PROMPT_LIBRARY_UPDATED_EVENT, notify);
 
     await adapter.refresh(controller.signal);
+
     expect(fetchImpl).toHaveBeenCalledWith("/pixaroma/api/prompt/library/markdown/refresh", {
       method: "POST",
       signal: controller.signal,
     });
+    expect(notify).toHaveBeenCalledOnce();
+    expect(notify.mock.calls[0][0]).toMatchObject({ detail: { library } });
+    window.removeEventListener(PROMPT_LIBRARY_UPDATED_EVENT, notify);
+  });
+
+  it("does not notify selectors from an older request after a newer request completes", async () => {
+    const newerLibrary = {
+      version: 1 as const,
+      prompts: [{ ...library.prompts[0], id: "styles/newer", sourcePath: "styles/newer.md", filename: "newer.md" }],
+    };
+    const resolvers: Array<(value: Response) => void> = [];
+    const fetchImpl = vi.fn(() => new Promise<Response>(resolve => resolvers.push(resolve)));
+    const adapter = createPromptLibraryAdapter({ fetchImpl });
+    const notify = vi.fn();
+    window.addEventListener(PROMPT_LIBRARY_UPDATED_EVENT, notify);
+
+    const loadPromise = adapter.load();
+    const refreshPromise = adapter.refresh();
+    resolvers[1](response(newerLibrary));
+    await refreshPromise;
+    resolvers[0](response(library));
+    await loadPromise;
+
+    expect(notify).toHaveBeenCalledOnce();
+    expect(notify.mock.calls[0][0]).toMatchObject({ detail: { library: newerLibrary } });
+    window.removeEventListener(PROMPT_LIBRARY_UPDATED_EVENT, notify);
   });
 
   it("normalizes structured API errors", async () => {

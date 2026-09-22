@@ -7,6 +7,19 @@ import react from "@vitejs/plugin-react";
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const docsDir = path.resolve(rootDir, "../docs/help");
 
+function runtimeStubs() {
+  return {
+    name: "pixaroma-runtime-stubs",
+    resolveId(id: string) {
+      if (id === "/scripts/app.js" || id === "/scripts/api.js") return `\0pixaroma-runtime:${id}`;
+    },
+    load(id: string) {
+      if (!id.startsWith("\0pixaroma-runtime:")) return undefined;
+      return "export const app = globalThis.__pixaromaTestApp ?? {}; export const api = globalThis.__pixaromaTestApi ?? {};";
+    },
+  };
+}
+
 function helpDocuments() {
   const virtualId = "virtual:pixaroma-help-documents";
   const resolvedId = `\0${virtualId}`;
@@ -22,8 +35,8 @@ function helpDocuments() {
   };
 }
 
-export default defineConfig(({ command }) => ({
-  plugins: [react(), helpDocuments()],
+export default defineConfig(({ command, mode }) => ({
+  plugins: [react(), helpDocuments(), ...(mode === "test" ? [runtimeStubs()] : [])],
   base: command === "build" ? "./" : "/",
   resolve: {
     alias: {
@@ -38,6 +51,11 @@ export default defineConfig(({ command }) => ({
       "/extensions": "http://127.0.0.1:8188",
       "/scripts": "http://127.0.0.1:8188",
     },
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: [path.resolve(rootDir, "./test/setup.ts")],
+    globals: true,
   },
   build: {
     outDir: path.resolve(rootDir, "../js/react"),

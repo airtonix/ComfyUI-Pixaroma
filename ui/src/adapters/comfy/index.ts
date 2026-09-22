@@ -19,4 +19,25 @@ export const comfyBridge: ComfyBridge = {
 
 export { ComfyApiError, fetchJson, getSetting, notify, openWorkflow, pixApiUrl, pixAsset };
 export type { NotificationType } from "./notifications";
-export type { NodeWidgetCleanup, NodeWidgetHost, NodeWidgetMount } from "./node-widget";
+export {
+  cleanupNodeWidget,
+  controlledNodeWidgetActions,
+  createNodeWidgetBridge,
+  hasNodeWidgetRoot,
+  mountNodeWidget,
+} from "./node-widget";
+export { createNodeWidgetHarness } from "./node-widget-harness";
+export type {
+  NodeWidgetActions,
+  NodeWidgetBridge,
+  NodeWidgetCleanup,
+  NodeWidgetComponent,
+  NodeWidgetHandle,
+  NodeWidgetHost,
+  NodeWidgetModel,
+  NodeWidgetMount,
+  NodeWidgetProps,
+  NodeWidgetRenderer,
+  NodeWidgetSerialization,
+} from "./node-widget";
+export type { NodeWidgetHarness } from "./node-widget-harness";

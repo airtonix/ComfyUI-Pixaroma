@@ -27,6 +27,17 @@ export function HelpBrowser({ entries, initialId, onClose }: HelpBrowserProps) {
   const selected = entries.find((entry) => entry.id === selectedId) ?? null;
 
   useEffect(() => setSelectedId(initialId ?? null), [initialId]);
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      if (query) setQuery("");
+      else onClose?.();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, query]);
   function selectEntry(entry: HelpEntry) { const next = [...history.slice(0, historyIndex + 1), entry.id]; setHistory(next); setHistoryIndex(next.length - 1); setSelectedId(entry.id); }
   function goBack() { if (historyIndex > 0) { const index = historyIndex - 1; setHistoryIndex(index); setSelectedId(history[index]); } }
   function goForward() { if (historyIndex < history.length - 1) { const index = historyIndex + 1; setHistoryIndex(index); setSelectedId(history[index]); } }

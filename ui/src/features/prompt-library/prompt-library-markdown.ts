@@ -165,6 +165,40 @@ export function renderPromptMarkdown(record: PromptRecord): string {
   return `---\n${frontmatter}\n---\n${record.body.replace(/\r\n?/g, "\n")}`;
 }
 
+export function normalizePromptRecord(value: unknown): PromptRecord {
+  if (!value || typeof value !== "object") throw new Error("record must be an object");
+  const record = value as Record<string, unknown>;
+  const sourcePath = record.sourcePath;
+  if (typeof sourcePath !== "string") throw new Error("sourcePath must be a string");
+  const path = normalizedPath(sourcePath);
+  if (typeof record.id !== "string" || record.id !== path.id) throw new Error(`${sourcePath}: id must match sourcePath`);
+  if (typeof record.name !== "string" || !record.name.trim()) throw new Error(`${sourcePath}: name must be a non-empty string`);
+  if (record.body !== undefined && typeof record.body !== "string") throw new Error(`${sourcePath}: body must be a string`);
+  if (record.kind !== "text" && record.kind !== "list") throw new Error(`${sourcePath}: kind must be text or list`);
+  if (record.prefix !== undefined && !["@", "#", "$", "&"].includes(String(record.prefix))) {
+    throw new Error(`${sourcePath}: prefix must be @, #, $, or &`);
+  }
+  const tags = normalizedTags(sourcePath, record.tags);
+  if (record.unknownFrontmatter !== undefined) {
+    if (!Array.isArray(record.unknownFrontmatter) || record.unknownFrontmatter.some((field) => {
+      return !field || typeof field !== "object" || typeof (field as Record<string, unknown>).key !== "string";
+    })) throw new Error(`${sourcePath}: unknownFrontmatter is invalid`);
+  }
+  return {
+    id: path.id,
+    sourcePath,
+    name: record.name.trim(),
+    tags,
+    body: record.body ?? "",
+    category: path.folders[0] ?? "",
+    folders: path.folders,
+    filename: path.filename,
+    kind: record.kind,
+    ...(record.prefix === undefined ? {} : { prefix: record.prefix as PromptRecord["prefix"] }),
+    ...(record.unknownFrontmatter === undefined ? {} : { unknownFrontmatter: record.unknownFrontmatter as PromptFrontmatterField[] }),
+  };
+}
+
 export function parsePromptLibrary(files: MarkdownFile[]): PromptLibraryLoadResult {
   const parsed: PromptRecord[] = [];
   const errors: PromptLibraryLoadResult["errors"] = [];

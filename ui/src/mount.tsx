@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { helpEntries, mergeRuntimeHelp, type HelpEntry } from "@/features/help/data";
 import { WidgetBrowser } from "@/widget-browser";
@@ -13,7 +13,15 @@ export type PixaromaReactUi = {
   mountHelpBrowser(container: HTMLElement, entries: HelpEntry[], options?: MountOptions): () => void;
 };
 
-const roots = new WeakMap<HTMLElement, Root>();
+type MountCleanup = () => void;
+type MountRecord = {
+  root: Root;
+  cleanup: MountCleanup;
+  dispose: MountCleanup;
+  mounted: boolean;
+};
+
+const roots = new WeakMap<HTMLElement, MountRecord>();
 const styleId = "pixaroma-react-styles";
 
 function injectStyles() {
@@ -24,33 +32,53 @@ function injectStyles() {
   document.head.appendChild(style);
 }
 
+export function mountReact(container: HTMLElement, content: ReactNode, cleanup: MountCleanup = () => {}): MountCleanup {
+  roots.get(container)?.dispose();
+  injectStyles();
+  container.classList.add("pixaroma-react-root");
+
+  const record: MountRecord = {
+    root: createRoot(container),
+    cleanup,
+    dispose: () => {},
+    mounted: true,
+  };
+  record.dispose = () => {
+    if (!record.mounted) return;
+    record.mounted = false;
+    try {
+      record.root.unmount();
+    } finally {
+      try {
+        record.cleanup();
+      } finally {
+        if (roots.get(container) === record) {
+          roots.delete(container);
+          container.classList.remove("pixaroma-react-root");
+        }
+      }
+    }
+  };
+  roots.set(container, record);
+  record.root.render(<StrictMode><div className="pixaroma-react">{content}</div></StrictMode>);
+
+  return record.dispose;
+}
+
 export const pixaromaReactUi: PixaromaReactUi = {
   mountHelpBrowser(container, entries, options = {}) {
-    roots.get(container)?.unmount();
-    injectStyles();
-    container.classList.add("pixaroma-react-root");
-    const root = createRoot(container);
-    roots.set(container, root);
     const content = mergeRuntimeHelp(helpEntries, entries);
-    root.render(
-      <StrictMode>
-        <div className="pixaroma-react">
-          <WidgetBrowser defaultWidget="help" widgetProps={{ help: { entries: content, initialId: options.initialId, onClose: options.onClose } }}>
-            <WidgetBrowser.Sidebar>
-              <WidgetBrowser.SidebarItem widget="help" />
-            </WidgetBrowser.Sidebar>
-            <WidgetBrowser.Content>
-              <WidgetBrowser.Sandbox widget="help" />
-            </WidgetBrowser.Content>
-          </WidgetBrowser>
-        </div>
-      </StrictMode>,
+    return mountReact(
+      container,
+      <WidgetBrowser defaultWidget="help" widgetProps={{ help: { entries: content, initialId: options.initialId, onClose: options.onClose } }}>
+        <WidgetBrowser.Sidebar>
+          <WidgetBrowser.SidebarItem widget="help" />
+        </WidgetBrowser.Sidebar>
+        <WidgetBrowser.Content>
+          <WidgetBrowser.Sandbox widget="help" />
+        </WidgetBrowser.Content>
+      </WidgetBrowser>,
     );
-    return () => {
-      root.unmount();
-      container.classList.remove("pixaroma-react-root");
-      roots.delete(container);
-    };
   },
 };
 

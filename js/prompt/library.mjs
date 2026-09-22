@@ -485,12 +485,8 @@ export function commitLibrary(data) {
 }
 
 // Flush any pending debounced write now (call on blur / editor close).
-// ONLY when a write is actually pending. Persisting unconditionally quietly cancelled
-// the editor's own cross-tab guard: closeLibraryEditor deliberately skips
-// commitLibrary when nothing changed (so tab A cannot stamp its open-time snapshot
-// over tab B's edits), and then this wrote that snapshot out anyway two lines later.
-// Gating on the pending TIMER is the right test and still cannot lose the last edit -
-// an in-editor edit always leaves a timer set until it is written.
+// Only flush when a write is actually pending: an in-editor edit always leaves a
+// timer set until it is written, while an unchanged editor must not persist stale data.
 export function flushLibrary() {
   if (!_persistTimer) return;
   clearTimeout(_persistTimer); _persistTimer = null;

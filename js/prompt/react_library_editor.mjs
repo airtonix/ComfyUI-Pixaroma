@@ -1,7 +1,5 @@
 import "../react/pixaroma-ui.js";
 import { installGraphUndoGuard } from "../shared/graph_undo_guard.mjs";
-import { openLibraryEditor as openLegacyLibraryEditor, closeLibraryEditorFor as closeLegacyLibraryEditorFor } from "./library_editor.mjs";
-
 const LIBRARY_URL = "/pixaroma/api/prompt/library/markdown";
 let active = null;
 
@@ -22,7 +20,7 @@ export function openReactLibraryEditor(node, options = {}) {
   closeActive();
   const api = reactApi();
   if (!api?.mountPromptLibrary) {
-    return openLegacyLibraryEditor(node, options);
+    throw new Error("Pixaroma prompt library React mount is unavailable");
   }
 
   const container = document.createElement("div");
@@ -48,14 +46,12 @@ export function openReactLibraryEditor(node, options = {}) {
     return;
   } catch (error) {
     closeActive();
-    console.warn("Pixaroma prompt library React mount failed; using the legacy editor", error);
-    return openLegacyLibraryEditor(node, options);
+    throw error;
   }
 }
 
 export function closeReactLibraryEditorFor(node) {
   if (active?.node === node) closeActive();
-  closeLegacyLibraryEditorFor(node);
 }
 
 export function closeReactLibraryEditor() {

@@ -54,13 +54,14 @@ export type PromptDraft = {
   body: string;
   kind: PromptKind;
   prefix?: PromptDraftPrefix;
+  storedPrefix?: "$" | "&";
 };
 
-export type PromptCreateRequest = PromptDraft & {
+export type PromptCreateRequest = Omit<PromptDraft, "storedPrefix"> & {
   previous_id?: never;
 };
 
-export type PromptUpdateRequest = Omit<PromptDraft, "prefix"> & {
+export type PromptUpdateRequest = Omit<PromptDraft, "prefix" | "storedPrefix"> & {
   prefix?: PromptStoredPrefix;
   previous_id: PromptId;
 };

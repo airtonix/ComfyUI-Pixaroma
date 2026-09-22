@@ -14,7 +14,7 @@ const library: PromptLibraryData = {
 };
 
 function adapter(overrides: Partial<PromptLibraryAdapter> = {}): PromptLibraryAdapter {
-  return { load: vi.fn(async () => ({ library, errors: [] })), refresh: vi.fn(async () => ({ library, errors: [] })), ...overrides };
+  return { load: vi.fn(async () => ({ library, errors: [] })), refresh: vi.fn(async () => ({ library, errors: [] })), save: vi.fn(async () => library.prompts[0]), delete: vi.fn(async () => {}), ...overrides };
 }
 
 describe("PromptLibrary", () => {
@@ -56,6 +56,38 @@ describe("PromptLibrary", () => {
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toContain("styles/broken.md");
     expect(alert.textContent).toContain("name must be a string");
+  });
+
+  it("closes after discarding a dirty draft", async () => {
+    const onClose = vi.fn();
+    render(<PromptLibrary adapter={adapter()} onClose={onClose} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Film look/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Prompt body" }), { target: { value: "Changed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a dirty draft when refresh removes its server record", async () => {
+    const refresh = vi.fn(async () => ({ library: { version: 1 as const, prompts: [] }, errors: [] }));
+    render(<PromptLibrary adapter={adapter({ refresh })} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Film look/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Prompt body" }), { target: { value: "Keep this draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    expect(screen.getByRole("textbox", { name: "Prompt body" })).toHaveValue("Keep this draft");
+    expect(screen.getByRole("alert").textContent).toContain("Your draft is preserved");
+  });
+
+  it("rejects malformed imported prompt JSON without changing the editor", async () => {
+    render(<PromptLibrary adapter={adapter()} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Film look/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Import prompt JSON" }), { target: { value: "{}" } });
+    fireEvent.click(screen.getByRole("button", { name: "Load draft" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("invalid prompt data");
+    expect(screen.getByRole("textbox", { name: "Prompt body" })).toHaveValue("A film look");
   });
 
   it("exposes nested folders and empty state", async () => {

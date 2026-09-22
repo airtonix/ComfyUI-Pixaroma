@@ -151,4 +151,54 @@ describe("prompt library adapter", () => {
       ],
     });
   });
+
+  it("saves with previous_id and accepts the server-authoritative renamed record", async () => {
+    const renamed = { ...library.prompts[0], id: "styles/film", sourcePath: "styles/film.md", filename: "film.md" };
+    const fetchImpl = vi.fn().mockResolvedValue(response({ prompt: renamed }));
+    const adapter = createPromptLibraryAdapter({ fetchImpl });
+    await expect(adapter.save({ ...renamed, previous_id: "styles/cinematic" })).resolves.toEqual(renamed);
+    expect(fetchImpl).toHaveBeenCalledWith("/pixaroma/api/prompt/library/markdown", expect.objectContaining({ method: "POST", body: expect.stringContaining('"previous_id":"styles/cinematic"') }));
+  });
+
+  it("notifies selectors after a successful save without a follow-up refresh", async () => {
+    const renamed = { ...library.prompts[0], id: "styles/film", sourcePath: "styles/film.md", filename: "film.md" };
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(response(library))
+      .mockResolvedValueOnce(response({ prompt: renamed }));
+    const adapter = createPromptLibraryAdapter({ fetchImpl });
+    const notify = vi.fn();
+    window.addEventListener(PROMPT_LIBRARY_UPDATED_EVENT, notify);
+
+    await adapter.load();
+    notify.mockClear();
+    await adapter.save({ ...renamed, previous_id: "styles/cinematic" });
+
+    expect(notify).toHaveBeenCalledOnce();
+    expect(notify.mock.calls[0][0]).toMatchObject({ detail: { library: { prompts: expect.arrayContaining([renamed]) } } });
+    window.removeEventListener(PROMPT_LIBRARY_UPDATED_EVENT, notify);
+  });
+
+  it("notifies selectors after a successful delete without a follow-up refresh", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(response(library))
+      .mockResolvedValueOnce(response({ ok: true }));
+    const adapter = createPromptLibraryAdapter({ fetchImpl });
+    const notify = vi.fn();
+    window.addEventListener(PROMPT_LIBRARY_UPDATED_EVENT, notify);
+
+    await adapter.load();
+    notify.mockClear();
+    await adapter.delete("styles/cinematic");
+
+    expect(notify).toHaveBeenCalledOnce();
+    expect(notify.mock.calls[0][0]).toMatchObject({ detail: { library: { prompts: [library.prompts[1]] } } });
+    window.removeEventListener(PROMPT_LIBRARY_UPDATED_EVENT, notify);
+  });
+
+  it("deletes an encoded nested ID", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(response({ ok: true }));
+    const adapter = createPromptLibraryAdapter({ fetchImpl });
+    await adapter.delete("styles/film");
+    expect(fetchImpl).toHaveBeenCalledWith("/pixaroma/api/prompt/library/markdown/styles%2Ffilm", { method: "DELETE", signal: undefined });
+  });
 });

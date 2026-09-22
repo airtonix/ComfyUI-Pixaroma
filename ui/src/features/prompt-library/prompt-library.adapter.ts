@@ -2,6 +2,7 @@ import type {
   PromptId,
   PromptLibraryLoadResult,
   PromptRecord,
+  SavePromptRequest,
 } from "./prompt-library.types";
 import { normalizePromptRecord } from "./prompt-library-markdown";
 import { pixApiUrl } from "@/adapters/comfy/assets";
@@ -27,6 +28,8 @@ export type PromptLibraryAdapter = {
   load(signal?: AbortSignal): Promise<PromptLibraryLoadResult>;
   refresh(signal?: AbortSignal): Promise<PromptLibraryLoadResult>;
   get(id: PromptId, signal?: AbortSignal): Promise<PromptRecord>;
+  save(request: SavePromptRequest, signal?: AbortSignal): Promise<PromptRecord>;
+  delete(id: PromptId, signal?: AbortSignal): Promise<void>;
 };
 
 export type PromptLibraryAdapterOptions = {
@@ -113,6 +116,7 @@ export function createPromptLibraryAdapter(options: PromptLibraryAdapterOptions 
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetchImpl = options.fetchImpl ?? fetch;
   let latestLibraryRequest = 0;
+  let latestLibrary: PromptLibraryLoadResult["library"] | null = null;
 
   async function request(route: string, init?: RequestInit): Promise<unknown> {
     const response = await fetchImpl(pixApiUrl(route), init);
@@ -129,14 +133,20 @@ export function createPromptLibraryAdapter(options: PromptLibraryAdapterOptions 
       const requestId = ++latestLibraryRequest;
       const route = baseUrl;
       const result = normalizedLibrary(await request(route, { signal }), route);
-      if (requestId === latestLibraryRequest) notifyPromptLibrary(result.library);
+      if (requestId === latestLibraryRequest) {
+        latestLibrary = result.library;
+        notifyPromptLibrary(result.library);
+      }
       return result;
     },
     async refresh(signal) {
       const requestId = ++latestLibraryRequest;
       const route = `${baseUrl}/refresh`;
       const result = normalizedLibrary(await request(route, { method: "POST", signal }), route);
-      if (requestId === latestLibraryRequest) notifyPromptLibrary(result.library);
+      if (requestId === latestLibraryRequest) {
+        latestLibrary = result.library;
+        notifyPromptLibrary(result.library);
+      }
       return result;
     },
     async get(id, signal) {
@@ -150,6 +160,40 @@ export function createPromptLibraryAdapter(options: PromptLibraryAdapterOptions 
       } catch (error) {
         throw invalidResponse(error instanceof Error ? error.message : String(error), route);
       }
+    },
+    async save(saveRequest, signal) {
+      const route = baseUrl;
+      const payload = await request(route, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(saveRequest),
+        signal,
+      });
+      const value = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+      if (!("prompt" in value)) throw invalidResponse("prompt must be an object", route);
+      try {
+        const prompt = normalizePromptRecord(value.prompt);
+        const mutationLibrary = value.library
+          ? normalizedLibrary(value.library, route).library
+          : {
+              version: 1 as const,
+              prompts: [...(latestLibrary?.prompts ?? []).filter((item) => item.id !== prompt.id && item.id !== (saveRequest.previous_id ?? "")), prompt],
+            };
+        latestLibrary = mutationLibrary;
+        notifyPromptLibrary(mutationLibrary);
+        return prompt;
+      } catch (error) {
+        throw invalidResponse(error instanceof Error ? error.message : String(error), route);
+      }
+    },
+    async delete(id, signal) {
+      await request(`${baseUrl}/${encodeURIComponent(id)}`, { method: "DELETE", signal });
+      const mutationLibrary = {
+        version: 1 as const,
+        prompts: (latestLibrary?.prompts ?? []).filter((prompt) => prompt.id !== id),
+      };
+      latestLibrary = mutationLibrary;
+      notifyPromptLibrary(mutationLibrary);
     },
   };
 }

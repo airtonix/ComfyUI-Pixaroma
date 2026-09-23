@@ -653,3 +653,115 @@ Do not move these tests into React. The server remains the owner of filesystem s
 12. **Keep `library.mjs` as the selector compatibility layer unless its synchronous initialization is separately redesigned.**
 
 The main architectural rule should be: **React owns editor state and presentation; the adapter owns HTTP; Python owns filesystem and Markdown integrity; `library.mjs` owns selector compatibility and prompt expansion.**
+
+---
+
+# Markdown-backed prompt records
+
+The prompt library must support loading the existing Markdown tree before the React editor replaces the imperative editor. The current user library is a symlink to a shared tag tree containing 416 Markdown records. Every record has YAML-style frontmatter with `name` and `tags`, followed by a non-empty body. Records are nested under categories such as `styles/camera`, `subject/hairstyles`, `room/featureless`, `nationality`, and `nsfw`.
+
+The Markdown format is the source of truth for this migration. Do not reduce records to the legacy JSON shape before the React feature receives them.
+
+## Markdown record contract
+
+Add a typed record that preserves storage identity and display metadata:
+
+```ts
+export type PromptRecord = {
+  id: string;              // normalized relative path without .md
+  sourcePath: string;      // e.g. styles/camera/close-up.md
+  name: string;            // frontmatter display name
+  tags: string[];
+  body: string;
+  category: string;        // first path component
+  folders: string[];       // path components including category
+  filename: string;
+  kind: "text" | "list";
+  prefix?: "@" | "#" | "$" | "&";
+};
+```
+
+Identity comes from the normalized relative path, not `name` or the filename stem. Existing records already contain display-name/filename differences, so the UI must preserve both values. A rename must distinguish changing the display name from changing the source path and must send `previous_id` for path changes.
+
+## Markdown parser boundary
+
+Add a pure parser/renderer outside React, for example `prompt-markdown.ts`:
+
+```ts
+parsePromptMarkdown(sourcePath: string, source: string): PromptRecord;
+parsePromptLibraryResponse(raw: unknown): PromptLibrary;
+renderPromptMarkdown(record: PromptRecord): string;
+```
+
+The parser must:
+
+- require frontmatter delimiters and `name`;
+- parse YAML tag lists;
+- preserve multiline body text and documented newline normalization;
+- derive category and folders from the relative path;
+- preserve display names that differ from filenames;
+- reject malformed records with a path-specific error;
+- avoid silently turning malformed records into empty prompts;
+- preserve unknown frontmatter fields when round-tripping is required.
+
+`styles/manifest.json` is category metadata, not a prompt record. Missing or incomplete manifest metadata must not prevent Markdown records from loading.
+
+## Read-only migration milestone
+
+Before implementing create, update, or delete, add a read-only milestone:
+
+- load all records from the Markdown endpoint;
+- render nested records in the correct folder tree;
+- use frontmatter names for display;
+- use relative paths for IDs;
+- preserve bodies and tags;
+- support search and tag filtering;
+- report malformed records without crashing the entire library;
+- refresh from server-authoritative state;
+- avoid silently falling back to the JSON-only library.
+
+Do not switch the editor until this milestone can load the existing user tree without losing path, frontmatter, body, tags, or category information.
+
+## Prefix and selector compatibility
+
+The current expansion code defines `@` as a text/snippet tag, `#` as a list tag, and `*` as wildcard syntax. The Markdown tree currently contains no stored `@`, `#`, or `$` prefixes, so prefix semantics must not be inferred from the current files.
+
+Preserve the existing selector mapping:
+
+- text records insert as `@name`;
+- list records insert as `#name`;
+- wildcard expansion remains owned by `expand.mjs`;
+- React does not implement prompt expansion.
+
+The requested `$` and `&` prefixes require an explicit compatibility decision. Before saving or expanding them, define whether they are stored record kinds, insertion modes, or body syntax. Until then, preserve any such metadata without inventing behavior.
+
+## Real-library fixtures and tests
+
+Build fixtures from the existing tree, including:
+
+- `nationality/american.md`;
+- `styles/camera/close-up.md`;
+- a record whose frontmatter name differs from its filename;
+- a multiline body;
+- `styles/manifest.json` present and absent;
+- malformed frontmatter;
+- missing tags;
+- duplicate IDs;
+- nested path traversal attempts.
+
+Test Markdown GET normalization, recursive records, category/folder extraction, multiline preservation, display-name identity, refresh, server-authoritative renames, and round-trip rendering. Add compatibility tests proving `@` and `#` mapping to the existing selector facade and explicit tests for the eventual `$`/`&` decision.
+
+## API and sequencing constraints
+
+Document whether the Markdown API returns raw documents, normalized records, or both. The normalized response must include `id`, `sourcePath`, frontmatter-derived metadata, body, and category/folder information. Recursive scanning, path containment, symlink/user-root handling, and atomic writes remain server responsibilities.
+
+Revise the implementation order to:
+
+1. Define the Markdown record contract and prefix decision.
+2. Implement parser, renderer, and real-library fixtures.
+3. Add a read-only Markdown adapter and normalization tests.
+4. Build React loading, tree, search, and filter behavior.
+5. Add selector compatibility mapping and refresh.
+6. Add save, rename, and delete only after round-trip tests pass.
+7. Add the imperative bridge and switch callers.
+8. Remove the old editor only after Markdown parity and insertion compatibility are proven.

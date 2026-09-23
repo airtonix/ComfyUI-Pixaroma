@@ -72,6 +72,13 @@ from .nodes._lora_helpers import (
     write_custom_preview as _lora_write_custom_preview,
     delete_custom_preview as _lora_delete_custom_preview,
 )
+from .nodes._prompt_library import (
+    PromptRecordError as _PromptRecordError,
+    list_prompt_files as _list_prompt_files,
+    migrate_legacy_prompt_records as _migrate_legacy_prompt_records,
+    prompt_filename as _prompt_filename,
+    sync_prompt_files as _sync_prompt_files,
+)
 from .nodes.node_krea_lora_convert import (
     inspect_lora as _krea_lora_inspect,
     resolve_and_convert as _krea_lora_convert,
@@ -563,6 +570,112 @@ async def prompt_library_post(request):
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
         return web.json_response({"error": "could not write prompt library"}, status=400)
 
+
+def _markdown_library(root):
+    prompts = _list_prompt_files(root)
+    for prompt in prompts:
+        prompt.setdefault("kind", "text")
+    return {"version": 1, "prompts": prompts}
+
+
+def _markdown_prompt(root, prompt_id):
+    filename = _prompt_filename(prompt_id)
+    return next((prompt for prompt in _list_prompt_files(root) if prompt["sourcePath"] == filename), None)
+
+
+def _markdown_migrate(request, root):
+    if os.path.isdir(root) and any(name.endswith(".md") for _, _, names in os.walk(root) for name in names):
+        return
+    legacy = _prompt_read_legacy(request)
+    if isinstance(legacy, dict):
+        rows = []
+        for tag in legacy.get("tags", []):
+            if isinstance(tag, dict):
+                rows.append(tag)
+        _migrate_legacy_prompt_records(root, rows)
+        _prompt_clear_legacy(request)
+
+
+@PromptServer.instance.routes.get("/pixaroma/api/prompt/library/markdown")
+async def prompt_markdown_library_get(request):
+    try:
+        with _PROMPT_LIBRARY_LOCK:
+            root, _ = _prompt_library_paths(request)
+            if not root:
+                return web.json_response({"error": "invalid user"}, status=403)
+            _markdown_migrate(request, root)
+            return web.json_response(_markdown_library(root))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+        return web.json_response({"error": str(error)}, status=400)
+
+
+@PromptServer.instance.routes.post("/pixaroma/api/prompt/library/markdown/refresh")
+async def prompt_markdown_library_refresh(request):
+    return await prompt_markdown_library_get(request)
+
+
+@PromptServer.instance.routes.get("/pixaroma/api/prompt/library/markdown/{prompt_id:.*}")
+async def prompt_markdown_prompt_get(request):
+    try:
+        with _PROMPT_LIBRARY_LOCK:
+            root, _ = _prompt_library_paths(request)
+            if not root:
+                return web.json_response({"error": "invalid user"}, status=403)
+            prompt = _markdown_prompt(root, request.match_info["prompt_id"])
+            if prompt is None:
+                return web.json_response({"error": "prompt not found"}, status=404)
+            prompt.setdefault("kind", "text")
+            return web.json_response({"prompt": prompt})
+    except _PromptRecordError as error:
+        return web.json_response({"error": str(error)}, status=400)
+    except (OSError, UnicodeError) as error:
+        return web.json_response({"error": str(error)}, status=400)
+
+
+@PromptServer.instance.routes.post("/pixaroma/api/prompt/library/markdown")
+async def prompt_markdown_prompt_post(request):
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise _PromptRecordError("record must be an object")
+        prompt = dict(payload)
+        previous_id = prompt.pop("previous_id", None)
+        prompt_id = prompt.get("id")
+        if not isinstance(prompt_id, str):
+            raise _PromptRecordError("id is required")
+        with _PROMPT_LIBRARY_LOCK:
+            root, _ = _prompt_library_paths(request)
+            if not root:
+                return web.json_response({"error": "invalid user"}, status=403)
+            records = _list_prompt_files(root)
+            if previous_id is not None:
+                records = [record for record in records if record["id"] != previous_id]
+            records = [record for record in records if record["id"] != prompt_id] + [prompt]
+            _sync_prompt_files(root, records)
+            saved = _markdown_prompt(root, prompt_id)
+            library = _markdown_library(root)
+        return web.json_response({"prompt": saved, "library": library})
+    except (_PromptRecordError, OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+        return web.json_response({"error": str(error)}, status=400)
+
+
+@PromptServer.instance.routes.delete("/pixaroma/api/prompt/library/markdown/{prompt_id:.*}")
+async def prompt_markdown_prompt_delete(request):
+    try:
+        with _PROMPT_LIBRARY_LOCK:
+            root, _ = _prompt_library_paths(request)
+            if not root:
+                return web.json_response({"error": "invalid user"}, status=403)
+            filename = _prompt_filename(request.match_info["prompt_id"])
+            path = os.path.join(root, filename)
+            if not _is_path_under(path, root) or not os.path.isfile(path):
+                return web.json_response({"error": "prompt not found"}, status=404)
+            os.remove(path)
+        return web.json_response({"ok": True})
+    except _PromptRecordError as error:
+        return web.json_response({"error": str(error)}, status=400)
+    except OSError as error:
+        return web.json_response({"error": str(error)}, status=400)
 
 
 @PromptServer.instance.routes.get("/pixaroma/api/sounds")

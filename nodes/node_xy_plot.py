@@ -19,6 +19,7 @@ The accumulator + cell PILs are also reachable by the save routes
 (server_routes.py) so the Save buttons can write the grid (and optionally each
 individual cell) to disk/output.
 """
+
 import json
 import os
 import threading
@@ -29,6 +30,14 @@ import torch
 from PIL import Image, ImageDraw, ImageFont
 
 from ._save_helpers import _build_pnginfo, _json_safe
+from ._xy_layout import (
+    MAX_PLOT_CELLS,
+    display_dimensions,
+    logical_coordinate,
+    validate_wrap,
+)
+from ._xy_report import new_session, record_cell, refresh_context
+from ._xy_report_events import notify
 
 # Guards the module-level session state below. The node executes on ComfyUI's
 # worker thread while the save / restyle routes run on the aiohttp thread, so a
@@ -36,9 +45,6 @@ from ._save_helpers import _build_pnginfo, _json_safe
 # (e.g. `next(iter(cells.values()))` raising "dict changed size during iteration").
 _LOCK = threading.RLock()
 
-# Hard cap on grid dimensions so a malformed/oversized state can't allocate a
-# giant canvas before the long-side downscale kicks in. Mirrors the JS cap.
-_MAX_DIM = 100
 
 # ── Server-side accumulator ────────────────────────────────────────────────
 # Keyed by sessionId -> {
@@ -50,20 +56,19 @@ _MAX_DIM = 100
 #   "prefix": str,      # filename_prefix for the Save buttons
 # }
 _SESSIONS = {}
-_SESSION_ORDER = []      # LRU order of sessionIds
-_MAX_SESSIONS = 8        # cap stored plots so memory can't grow unbounded
+_SESSION_ORDER = []  # LRU order of sessionIds
+_MAX_SESSIONS = 8  # cap stored plots so memory can't grow unbounded
 
 # Grid layout constants (px). Labels + gaps scale with cell size at render time.
-_GRID_LONG_SIDE_CAP = 4096   # preview + IMAGE-output long-side cap (keeps them light)
+_GRID_LONG_SIDE_CAP = 4096  # preview + IMAGE-output long-side cap (keeps them light)
 
 # Save-resolution presets for the Save Disk / Save Output buttons (px on the
 # grid's long side). The Save buttons re-assemble the grid at SAVE time from the
 # cached cells, so a bigger export costs nothing on a normal run. "full" is native
 # resolution, but hard-capped on the long side so a pathological huge plot (e.g.
 # 20+ columns of 1024px cells) exports a bounded PNG instead of a ~100000px
-# monster. (The transient native-canvas size is already bounded by _MAX_DIM x the
-# cell size - the very canvas the preview assembles every run - so this governs
-# the exported file's dimensions + encode, not the peak assembly allocation.)
+# monster. The cell count is bounded by MAX_PLOT_CELLS; this export limit bounds
+# the encoded dimensions, not the transient native canvas allocation.
 _GRID_FULL_SAFETY = 16384
 _SAVE_SIZE_CAPS = {"2048": 2048, "4096": 4096, "8192": 8192, "full": _GRID_FULL_SAFETY}
 
@@ -71,9 +76,24 @@ _SAVE_SIZE_CAPS = {"2048": 2048, "4096": 4096, "8192": 8192, "full": _GRID_FULL_
 # style the background, the empty-cell tiles, the value labels, and the orange
 # axis-name lines. "dark" is the Pixaroma default.
 _THEMES = {
-    "dark":  {"grid": (20, 20, 20),    "cell": (42, 42, 42),    "label": (235, 235, 235), "axis": (246, 103, 68)},
-    "light": {"grid": (242, 242, 242), "cell": (255, 255, 255), "label": (28, 28, 28),    "axis": (214, 80, 48)},
-    "mono":  {"grid": (18, 18, 18),    "cell": (40, 40, 40),    "label": (236, 236, 236), "axis": (170, 170, 170)},
+    "dark": {
+        "grid": (20, 20, 20),
+        "cell": (42, 42, 42),
+        "label": (235, 235, 235),
+        "axis": (246, 103, 68),
+    },
+    "light": {
+        "grid": (242, 242, 242),
+        "cell": (255, 255, 255),
+        "label": (28, 28, 28),
+        "axis": (214, 80, 48),
+    },
+    "mono": {
+        "grid": (18, 18, 18),
+        "cell": (40, 40, 40),
+        "label": (236, 236, 236),
+        "axis": (170, 170, 170),
+    },
 }
 
 _FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "fonts")
@@ -89,7 +109,11 @@ def _load_font(size):
         return _FONT_CACHE[size]
     font = None
     try:
-        for name in ("Inter-Variable.ttf", "Roboto-Variable.ttf", "Montserrat-Variable.ttf"):
+        for name in (
+            "Inter-Variable.ttf",
+            "Roboto-Variable.ttf",
+            "Montserrat-Variable.ttf",
+        ):
             p = os.path.join(_FONT_DIR, name)
             if os.path.exists(p):
                 font = ImageFont.truetype(p, size)
@@ -103,7 +127,7 @@ def _load_font(size):
         font = None
     if font is None:
         try:
-            font = ImageFont.load_default(size)   # PIL >= 10
+            font = ImageFont.load_default(size)  # PIL >= 10
         except Exception:
             font = ImageFont.load_default()
     _FONT_CACHE[size] = font
@@ -128,6 +152,7 @@ def _fit_font(draw, text, base_size, max_w, min_size=10):
 # images (user report, 2026-08-02). These wrap it into the strip instead, which
 # is also what makes a long label readable rather than merely contained.
 # Short labels wrap to a single line, so sampler/checkpoint grids are unchanged.
+
 
 def _line_h(draw, font):
     """Line pitch for `font`: ascender-to-descender plus a little leading."""
@@ -230,14 +255,14 @@ def _fit_wrapped(draw, text, base_size, max_w, max_h, min_size=9):
 
     size = int(base_size)
     out = None
-    first_fit = None      # largest size that fits by HEIGHT, even if it split a word
+    first_fit = None  # largest size that fits by HEIGHT, even if it split a word
     while size >= min_size:
         f = _load_font(size)
         lh = _line_h(draw, f)
         lines, broke = _wrap_ex(draw, text, f, max_w)
         if len(lines) * lh <= max_h:
             if not broke:
-                out = (f, lines, lh)      # fits AND keeps every word whole
+                out = (f, lines, lh)  # fits AND keeps every word whole
                 break
             if first_fit is None:
                 first_fit = (f, lines, lh)
@@ -254,7 +279,7 @@ def _fit_wrapped(draw, text, base_size, max_w, max_h, min_size=9):
         out = (f, _wrap_lines(draw, text, f, max_w, max_lines=keep), lh)
 
     if len(_WRAP_MEMO) >= _WRAP_MEMO_MAX:
-        _WRAP_MEMO.clear()   # bounded reset; the next assemble re-derives cheaply
+        _WRAP_MEMO.clear()  # bounded reset; the next assemble re-derives cheaply
     _WRAP_MEMO[key] = out
     return (out[0], list(out[1]), out[2])
 
@@ -270,7 +295,11 @@ def _tensor_to_pil(frame):
     .detach() guards against autograd if ever called outside ComfyUI's no_grad
     executor; .contiguous() is required because a batch slice (image[i]) is
     often non-contiguous and .numpy() would fail/garble on it."""
-    arr = (frame.detach().cpu().contiguous().numpy() * 255.0).clip(0, 255).astype(np.uint8)
+    arr = (
+        (frame.detach().cpu().contiguous().numpy() * 255.0)
+        .clip(0, 255)
+        .astype(np.uint8)
+    )
     pil = Image.fromarray(arr)
     if pil.mode != "RGB":
         pil = pil.convert("RGB")
@@ -303,6 +332,8 @@ def _evict_sessions():
     while len(_SESSION_ORDER) > _MAX_SESSIONS:
         old = _SESSION_ORDER.pop(0)
         sess = _SESSIONS.pop(old, None)
+        if sess is not None:
+            notify(old)
         # Delete the evicted plot's grid PNG from temp/ so old grids don't pile
         # up (temp is otherwise only cleared on ComfyUI restart).
         if sess and sess.get("grid_name"):
@@ -347,7 +378,9 @@ def restyle_session(session_id, theme):
         if not sess:
             return None
         sess["theme"] = theme if theme in _THEMES else "dark"
-        grid_pil = _assemble_grid(sess)   # reads cells; under lock so execute can't mutate mid-read
+        grid_pil = _assemble_grid(
+            sess
+        )  # reads cells; under lock so execute can't mutate mid-read
         grid_name = sess["grid_name"]
         # Re-embed the workflow execute() put in this file. Read under the same
         # lock as the assemble; without this, switching theme would REWRITE the
@@ -357,23 +390,21 @@ def restyle_session(session_id, theme):
     temp_dir = folder_paths.get_temp_directory()
     os.makedirs(temp_dir, exist_ok=True)
     try:
-        grid_pil.save(os.path.join(temp_dir, grid_name), "PNG",
-                      pnginfo=grid_info)   # I/O outside the lock
+        grid_pil.save(
+            os.path.join(temp_dir, grid_name), "PNG", pnginfo=grid_info
+        )  # I/O outside the lock
     except Exception:
         return None
     return grid_name
 
 
-def _assemble_grid(sess, max_long_side=_GRID_LONG_SIDE_CAP):
-    """Build the labeled grid PIL.Image from whatever cells `sess` has so far.
-    Missing cells render as empty tiles. Pure function of the session state.
-
-    max_long_side caps the grid's long side (default 4096 for the preview + the
-    IMAGE tensor). Pass None/0 to skip the cap and assemble at native resolution
-    (used by the Save buttons for full-resolution exports)."""
+def _grid_layout(sess):
+    """Measure the grid without allocating its pixel buffer."""
     cells = sess["cells"]
     cols = max(1, int(sess["cols"]))
     rows = max(1, int(sess["rows"]))
+    wrap = sess.get("wrap")
+    cols, rows = display_dimensions(cols, rows, wrap)
     draw_labels = bool(sess.get("draw_labels", True))
     pal = _THEMES.get(sess.get("theme") or "dark", _THEMES["dark"])
 
@@ -402,7 +433,23 @@ def _assemble_grid(sess, max_long_side=_GRID_LONG_SIDE_CAP):
     # Only the BASE line height is shared now - each column carries its own font
     # (they shrink independently), so there is no single x_font any more.
     x_lh = _line_h(sdraw, font)
-    if draw_labels:
+    if draw_labels and wrap:
+        labels = x_labels if wrap["axis"] == "x" else y_labels
+        axis_name = (x_name or "X") if wrap["axis"] == "x" else (y_name or "Y")
+        for index in range(wrap["count"]):
+            value = str(labels[index]) if index < len(labels) else ""
+            x_label_lines.append(
+                _fit_wrapped(
+                    sdraw,
+                    axis_name + ": " + value,
+                    font_size,
+                    max(1, cell_w - 6),
+                    _X_LABEL_MAX_LINES * x_lh,
+                )
+            )
+        col_label_h = max(len(entry[1]) * entry[2] for entry in x_label_lines) + 2 * pad
+        row_label_w = 0
+    elif draw_labels:
         # Row-label strip: wide enough to show the full Y label (sampler /
         # checkpoint names can be long). A label too long for the cap is
         # WRAPPED into the strip when drawn, not shrunk until it overflows.
@@ -412,7 +459,10 @@ def _assemble_grid(sess, max_long_side=_GRID_LONG_SIDE_CAP):
             widest = max(widest, _measure(sdraw, str(lab), font)[0])
         # also keep room for the corner axis-name lines
         for nm in (("↓ " + y_name), ("→ " + x_name)):
-            widest = max(widest, _measure(sdraw, nm, _load_font(max(11, round(font_size * 0.8))))[0])
+            widest = max(
+                widest,
+                _measure(sdraw, nm, _load_font(max(11, round(font_size * 0.8))))[0],
+            )
         row_label_w = max(60, min(row_w_cap, widest + 2 * pad))
 
         # Column labels wrap too, so the header strip has to be as tall as the
@@ -433,7 +483,9 @@ def _assemble_grid(sess, max_long_side=_GRID_LONG_SIDE_CAP):
             if not lab:
                 x_label_lines.append(None)
                 continue
-            x_label_lines.append(_fit_wrapped(sdraw, lab, font_size, cell_w - 6, x_budget_h))
+            x_label_lines.append(
+                _fit_wrapped(sdraw, lab, font_size, cell_w - 6, x_budget_h)
+            )
         blocks = [len(e[1]) * e[2] for e in x_label_lines if e]
         col_label_h = (max(blocks) if blocks else x_lh) + 2 * pad
     else:
@@ -441,35 +493,117 @@ def _assemble_grid(sess, max_long_side=_GRID_LONG_SIDE_CAP):
         row_label_w = 0
 
     grid_w = row_label_w + cols * cell_w + (cols + 1) * gap
-    grid_h = col_label_h + rows * cell_h + (rows + 1) * gap
+    label_rows = rows if wrap else 1
+    grid_h = label_rows * col_label_h + rows * cell_h + (rows + 1) * gap
 
+    return (
+        cols,
+        rows,
+        draw_labels,
+        pal,
+        cell_w,
+        cell_h,
+        gap,
+        font_size,
+        pad,
+        x_labels,
+        y_labels,
+        x_name,
+        y_name,
+        x_label_lines,
+        row_label_w,
+        col_label_h,
+        grid_w,
+        grid_h,
+    )
+
+
+def _capped_grid_size(width, height, max_long_side):
+    long_side = max(width, height)
+    if max_long_side and long_side > max_long_side:
+        scale = max_long_side / long_side
+        return max(1, round(width * scale)), max(1, round(height * scale))
+    return width, height
+
+
+def session_grid_size(session_id, max_long_side=_GRID_LONG_SIDE_CAP):
+    """Return export dimensions under the session lock, or None before a grid."""
+    with _LOCK:
+        sess = _SESSIONS.get(session_id)
+        if not sess or not sess["cells"]:
+            return None
+        *_, width, height = _grid_layout(sess)
+        return _capped_grid_size(width, height, max_long_side)
+
+
+def _assemble_grid(sess, max_long_side=_GRID_LONG_SIDE_CAP):
+    """Render the measured layout, capped at the requested export size."""
+    (
+        cols,
+        rows,
+        draw_labels,
+        pal,
+        cell_w,
+        cell_h,
+        gap,
+        font_size,
+        pad,
+        x_labels,
+        y_labels,
+        x_name,
+        y_name,
+        x_label_lines,
+        row_label_w,
+        col_label_h,
+        grid_w,
+        grid_h,
+    ) = _grid_layout(sess)
+    cells = sess["cells"]
+    wrap = sess.get("wrap")
     img = Image.new("RGB", (grid_w, grid_h), pal["grid"])
     draw = ImageDraw.Draw(img)
 
     def cell_xy(ci, ri):
         x = row_label_w + gap + ci * (cell_w + gap)
-        y = col_label_h + gap + ri * (cell_h + gap)
+        label_y = col_label_h * (ri + 1 if wrap else 1)
+        y = label_y + gap + ri * (cell_h + gap)
         return x, y
 
     # Cells (or empty tiles).
     for ri in range(rows):
         for ci in range(cols):
+            key = logical_coordinate(ci, ri, wrap)
+            if key is None:
+                continue
             x, y = cell_xy(ci, ri)
-            cell = cells.get((ci, ri))
+            cell = cells.get(key)
             if cell is not None:
                 if cell.size != (cell_w, cell_h):
                     tile = Image.new("RGB", (cell_w, cell_h), pal["cell"])
                     fitted = cell.copy()
                     fitted.thumbnail((cell_w, cell_h), Image.LANCZOS)
-                    tile.paste(fitted, ((cell_w - fitted.width) // 2,
-                                        (cell_h - fitted.height) // 2))
+                    tile.paste(
+                        fitted,
+                        ((cell_w - fitted.width) // 2, (cell_h - fitted.height) // 2),
+                    )
                     img.paste(tile, (x, y))
                 else:
                     img.paste(cell, (x, y))
             else:
                 draw.rectangle([x, y, x + cell_w - 1, y + cell_h - 1], fill=pal["cell"])
 
-    if draw_labels:
+    if draw_labels and wrap:
+        for index, (lf, lines, lh) in enumerate(x_label_lines):
+            ci, ri = index % cols, index // cols
+            cx, cy = cell_xy(ci, ri)
+            ty = cy - col_label_h + (col_label_h - len(lines) * lh) / 2
+            for line in lines:
+                tw = _measure(draw, line, lf)[0]
+                draw.text(
+                    (cx + (cell_w - tw) / 2, ty), line, font=lf, fill=pal["label"]
+                )
+                ty += lh
+    elif draw_labels:
         # Column labels (X values), wrapped and centered above each column. Each
         # column carries its OWN font and line height (they shrink independently
         # to fit the shared budget), so read them back per column rather than
@@ -483,7 +617,9 @@ def _assemble_grid(sess, max_long_side=_GRID_LONG_SIDE_CAP):
             ty = (col_label_h - len(lines) * lh) / 2
             for line in lines:
                 tw = _measure(draw, line, lf)[0]
-                draw.text((cx + (cell_w - tw) / 2, ty), line, font=lf, fill=pal["label"])
+                draw.text(
+                    (cx + (cell_w - tw) / 2, ty), line, font=lf, fill=pal["label"]
+                )
                 ty += lh
         # Row labels (Y values), wrapped into the left strip and centered
         # against their row. Wrapping (rather than shrinking one long line) is
@@ -498,7 +634,12 @@ def _assemble_grid(sess, max_long_side=_GRID_LONG_SIDE_CAP):
             ty = cy + (cell_h - len(lines) * lh) / 2
             for line in lines:
                 tw = _measure(draw, line, lf)[0]
-                draw.text((pad + max(0, (y_avail_w - tw) / 2), ty), line, font=lf, fill=pal["label"])
+                draw.text(
+                    (pad + max(0, (y_avail_w - tw) / 2), ty),
+                    line,
+                    font=lf,
+                    fill=pal["label"],
+                )
                 ty += lh
         # Axis names in the top-left corner: "↓ y_name" over "→ x_name".
         corner_lines = []
@@ -516,12 +657,9 @@ def _assemble_grid(sess, max_long_side=_GRID_LONG_SIDE_CAP):
             draw.text((4, ty), line, font=lf, fill=pal["axis"])
             ty += _measure(draw, line, lf)[1] + 2
 
-    # Cap the long side so a big grid can't explode memory / the preview. The
-    # Save buttons pass a larger cap (or None) to export at full resolution.
-    long_side = max(grid_w, grid_h)
-    if max_long_side and long_side > max_long_side:
-        scale = max_long_side / long_side
-        img = img.resize((max(1, round(grid_w * scale)), max(1, round(grid_h * scale))), Image.LANCZOS)
+    export_size = _capped_grid_size(grid_w, grid_h, max_long_side)
+    if export_size != img.size:
+        img = img.resize(export_size, Image.LANCZOS)
 
     return img
 
@@ -569,8 +707,19 @@ class PixaromaXYPlot:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE", {"tooltip": "Wire your workflow's final image here, like a Preview node. Each plot run feeds one cell of the grid."}),
-                "filename_prefix": ("STRING", {"default": "xy_plot", "tooltip": "Filename stem used by the Save buttons. Supports subfolders with '/' and the same date / native tokens as Preview Image Pixaroma."}),
+                "image": (
+                    "IMAGE",
+                    {
+                        "tooltip": "Wire your workflow's final image here, like a Preview node. Each plot run feeds one cell of the grid."
+                    },
+                ),
+                "filename_prefix": (
+                    "STRING",
+                    {
+                        "default": "xy_plot",
+                        "tooltip": "Use Filename… to build names with relative subfolders, %date:yyyy-MM-dd HH-mm-ss%, native date/time tokens, %width%/%height%, and scalar %Node.widget% references. Dimensions include labels and the Save size cap.",
+                    },
+                ),
             },
             "hidden": {
                 "XYPlotState": ("STRING", {"default": "{}"}),
@@ -581,7 +730,9 @@ class PixaromaXYPlot:
 
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("grid",)
-    OUTPUT_TOOLTIPS = ("The assembled comparison grid. During a plot it's the grid built so far; after the last cell it's complete. Wire it onward (e.g. to upscale or save) if you like.",)
+    OUTPUT_TOOLTIPS = (
+        "The assembled comparison grid. During a plot it's the grid built so far; after the last cell it's complete. Wire it onward (e.g. to upscale or save) if you like.",
+    )
     FUNCTION = "execute"
     OUTPUT_NODE = True
     CATEGORY = "👑 Pixaroma/🔀 Logic & Flow"
@@ -593,7 +744,14 @@ class PixaromaXYPlot:
         # cache hit ever returns a stale cell. Same pattern as Preview / Notify.
         return float("nan")
 
-    def execute(self, image, filename_prefix="xy_plot", XYPlotState="{}", prompt=None, extra_pnginfo=None):
+    def execute(
+        self,
+        image,
+        filename_prefix="xy_plot",
+        XYPlotState="{}",
+        prompt=None,
+        extra_pnginfo=None,
+    ):
         try:
             state = json.loads(XYPlotState) if XYPlotState else {}
             if not isinstance(state, dict):
@@ -609,8 +767,8 @@ class PixaromaXYPlot:
         try:
             xi = int(state.get("xi", 0))
             yi = int(state.get("yi", 0))
-            cols = max(1, min(_MAX_DIM, int(state.get("cols", 1))))
-            rows = max(1, min(_MAX_DIM, int(state.get("rows", 1))))
+            cols = max(1, min(MAX_PLOT_CELLS, int(state.get("cols", 1))))
+            rows = max(1, min(MAX_PLOT_CELLS // cols, int(state.get("rows", 1))))
         except (ValueError, TypeError) as e:
             print("[Pixaroma] XY Plot: malformed cursor in XYPlotState: %s" % e)
             return {"ui": {}, "result": (image,)}
@@ -618,32 +776,25 @@ class PixaromaXYPlot:
         # Accumulate + (re)assemble under the lock so a concurrent restyle/save
         # on the aiohttp thread can't read `cells` mid-write.
         with _LOCK:
-            # Create the session on its FIRST cell. The JS driver makes a fresh
-            # sessionId per plot, so a genuinely new plot always lands here; we
-            # do NOT wipe an existing session when a (0,0) cell re-arrives (a
-            # retry/re-execute), which would discard the cells gathered so far.
+            # Browser runs precreate the report before queuing. Older/native
+            # clients still create it on the first cell. A repeated (0,0) must
+            # not discard cells that have already arrived.
             if session_id not in _SESSIONS:
-                grid_name = "pixaroma_xy_grid_%s.png" % "".join(
-                    c for c in str(session_id) if c.isalnum() or c in "_-"
-                )[:80]
-                _SESSIONS[session_id] = {
-                    "cells": {},
-                    "cols": cols, "rows": rows,
-                    "x_labels": state.get("xLabels") or [],
-                    "y_labels": state.get("yLabels") or [],
-                    "x_name": state.get("xName") or "",
-                    "y_name": state.get("yName") or "",
-                    "draw_labels": bool(state.get("drawLabels", True)),
-                    "theme": state.get("theme") or "dark",
-                    "grid_name": grid_name,
-                    "prefix": state.get("prefix") or filename_prefix,
-                }
+                _SESSIONS[session_id] = new_session(
+                    session_id,
+                    {
+                        "cols": cols,
+                        "rows": rows,
+                        "prefix": state.get("prefix") or filename_prefix,
+                        "lock_seed": state.get("lockSeed", True),
+                    },
+                )
+                notify(session_id)
             sess = _SESSIONS[session_id]
             _touch_session(session_id)
 
             # Keep label arrays / dims fresh (JS sends the full arrays every cell).
-            # Slice to the clamped dims so a manually-crafted oversized state can't
-            # leave label arrays longer than the grid (kept internally consistent).
+            # Slice to the clamped dimensions so labels stay within the grid.
             sess["cols"], sess["rows"] = cols, rows
             # isinstance guards: a manually-crafted state could send a non-list
             # (e.g. an int) for xLabels/yLabels, and list(int) would raise.
@@ -651,20 +802,47 @@ class PixaromaXYPlot:
                 sess["x_labels"] = [str(v) for v in state["xLabels"][:cols]]
             if isinstance(state.get("yLabels"), list):
                 sess["y_labels"] = [str(v) for v in state["yLabels"][:rows]]
+            try:
+                sess["wrap"] = validate_wrap(
+                    state.get("wrap"),
+                    cols,
+                    rows,
+                    sess["x_labels"],
+                    sess["y_labels"],
+                )
+            except (ValueError, TypeError):
+                sess["wrap"] = None
             sess["x_name"] = state.get("xName") or sess.get("x_name", "")
             sess["y_name"] = state.get("yName") or sess.get("y_name", "")
-            sess["draw_labels"] = bool(state.get("drawLabels", sess.get("draw_labels", True)))
+            sess["draw_labels"] = bool(
+                state.get("drawLabels", sess.get("draw_labels", True))
+            )
             sess["theme"] = state.get("theme") or sess.get("theme", "dark")
+            refresh_context(sess)
 
             # Store this cell (first frame of the batch). Skip out-of-range cells
             # so a bad cursor can't accumulate cells that never render / leak.
             if 0 <= xi < cols and 0 <= yi < rows:
                 try:
-                    sess["cells"][(xi, yi)] = _tensor_to_pil(image[0])
+                    record_cell(
+                        sess,
+                        xi,
+                        yi,
+                        _tensor_to_pil(image[0]),
+                        prompt,
+                        extra_pnginfo,
+                        state,
+                    )
                 except Exception as e:
-                    print("[Pixaroma] XY Plot: failed to store cell (%d,%d): %s" % (xi, yi, e))
+                    print(
+                        "[Pixaroma] XY Plot: failed to record cell (%d,%d): %s"
+                        % (xi, yi, e)
+                    )
             else:
-                print("[Pixaroma] XY Plot: cell (%d,%d) outside %dx%d grid - skipped" % (xi, yi, cols, rows))
+                print(
+                    "[Pixaroma] XY Plot: cell (%d,%d) outside %dx%d grid - skipped"
+                    % (xi, yi, cols, rows)
+                )
 
             grid_name = sess["grid_name"]
             try:
@@ -711,13 +889,22 @@ class PixaromaXYPlot:
         # Hand the EXECUTION-time prompt + workflow to the frontend (embedded as
         # an extra field on the frame, NOT a separate ui key - Preview Pattern
         # #16) so Save Output bakes in the seed that actually produced the grid.
-        workflow = extra_pnginfo.get("workflow") if isinstance(extra_pnginfo, dict) else None
+        workflow = (
+            extra_pnginfo.get("workflow") if isinstance(extra_pnginfo, dict) else None
+        )
         frame = {
             "filename": grid_name,
             "subfolder": "",
             "type": "temp",
-            "_xy": _json_safe({"sessionId": str(session_id), "xi": xi, "yi": yi,
-                               "cols": cols, "rows": rows}),
+            "_xy": _json_safe(
+                {
+                    "sessionId": str(session_id),
+                    "xi": xi,
+                    "yi": yi,
+                    "cols": cols,
+                    "rows": rows,
+                }
+            ),
             "_pixaroma_meta": _json_safe({"prompt": prompt, "workflow": workflow}),
         }
         return {

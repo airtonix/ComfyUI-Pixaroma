@@ -21,11 +21,16 @@ from .nodes._save_helpers import (
     _resolve_save_folder,
     _safe_prefix,
 )
+from .nodes._xy_filename import plan_xy_filename
+from .xy_report_routes import register_routes as _register_xy_report_routes
 from .nodes._save_text_helpers import (
     count_entries as _st_count_entries,
     normalize_txt_name as _st_normalize_txt_name,
 )
-from .nodes._prompt_reader_helpers import read_prompt_from_image, resolve_input_image_name
+from .nodes._prompt_reader_helpers import (
+    read_prompt_from_image,
+    resolve_input_image_name,
+)
 from .nodes import _video_prompt_helpers as _vp
 from .nodes import _ai_prompt_presets as _aip
 from .nodes._cache_bust_helpers import stamp_import_urls
@@ -92,6 +97,8 @@ from .nodes._workflow_index_helpers import (
     reserved_part as _wf_reserved_part,
     WIN_RESERVED_NAMES as _WIN_RESERVED_NAMES,
 )
+
+_register_xy_report_routes(PromptServer.instance.routes)
 
 # Ensure ComfyUI/models/fonts/ exists so users have a place to drop fonts.
 try:
@@ -1935,10 +1942,63 @@ async def api_preview_prepare(request):
         return web.json_response({"error": f"prepare failed: {e}"}, status=500)
 
     image_data_uri = "data:image/png;base64," + base64.b64encode(body).decode("ascii")
-    return web.json_response({
-        "image_b64": image_data_uri,
-        "suggested_filename": suggested_filename,
-    })
+    return web.json_response(
+        {
+            "image_b64": image_data_uri,
+            "suggested_filename": suggested_filename,
+        }
+    )
+
+
+@PromptServer.instance.routes.post("/pixaroma/api/xy_plot/filename")
+async def api_xy_plot_filename(request):
+    """Preview the real output and disk names without rendering or writing files."""
+    try:
+        data = await request.json()
+    except Exception:
+        data = None
+    if not isinstance(data, dict):
+        result = plan_xy_filename(None, folder_paths.get_output_directory())
+        result["errors"] = ["Send a JSON object with a filename_prefix string."]
+        return web.json_response(result, status=400)
+    width = height = None
+    session_id = data.get("session_id")
+    valid_sid = (
+        isinstance(session_id, str)
+        and bool(_SAFE_ID_RE.match(session_id))
+        and len(session_id) <= _MAX_ID_LEN
+    )
+    try:
+        if valid_sid:
+            from .nodes.node_xy_plot import session_grid_size, resolve_save_cap
+
+            size = session_grid_size(
+                session_id, resolve_save_cap(data.get("save_max_size"))
+            )
+            if size:
+                width, height = size
+        if width is None:
+            grid_filename = data.get("grid_filename")
+            if isinstance(grid_filename, str) and grid_filename:
+                temp_dir = folder_paths.get_temp_directory()
+                grid_path = os.path.join(temp_dir, os.path.basename(grid_filename))
+                if _is_path_under(grid_path, temp_dir) and os.path.isfile(grid_path):
+                    # PIL reads the header here; it never decodes the grid pixels.
+                    with Image.open(grid_path) as grid:
+                        if grid.format == "PNG":
+                            width, height = grid.size
+        result = plan_xy_filename(
+            data.get("filename_prefix", "xy_plot"),
+            folder_paths.get_output_directory(),
+            width,
+            height,
+        )
+    except (OSError, ValueError):
+        result = plan_xy_filename(
+            None, folder_paths.get_output_directory(), width, height
+        )
+        result["errors"] = ["Could not read the grid size or output destination."]
+    return web.json_response(result, status=400 if result["errors"] else 200)
 
 
 @PromptServer.instance.routes.post("/pixaroma/api/xy_plot/save")
@@ -1970,9 +2030,13 @@ async def api_xy_plot_save(request):
     save_cells = data.get("save_cells") is True
     workflow = data.get("workflow")
     prompt = data.get("prompt")
-    prefix = _safe_prefix(data.get("filename_prefix", "xy_plot")) or "xy_plot"
+    prefix = data.get("filename_prefix", "xy_plot")
 
-    valid_sid = isinstance(session_id, str) and bool(_SAFE_ID_RE.match(session_id)) and len(session_id) <= _MAX_ID_LEN
+    valid_sid = (
+        isinstance(session_id, str)
+        and bool(_SAFE_ID_RE.match(session_id))
+        and len(session_id) <= _MAX_ID_LEN
+    )
 
     # Prefer a grid re-assembled from the live session's cached cells at the user's
     # chosen Save resolution (built once, only on Save - the preview + the IMAGE
@@ -2012,11 +2076,17 @@ async def api_xy_plot_save(request):
 
     try:
         output_dir = folder_paths.get_output_directory()
-        full_folder, name, counter, subfolder, _ = folder_paths.get_save_image_path(
-            prefix, output_dir, grid_pil.width, grid_pil.height
-        )
+        plan = plan_xy_filename(prefix, output_dir, grid_pil.width, grid_pil.height)
+        if plan["errors"]:
+            return web.json_response(
+                {"error": " ".join(plan["errors"]), **plan}, status=400
+            )
+        subfolder = plan["subfolder"]
+        full_folder = os.path.join(output_dir, subfolder)
+        name = os.path.basename(plan["prefix"])
+        counter = plan["counter"]
+        fname = plan["filename"]
         os.makedirs(full_folder, exist_ok=True)
-        fname = f"{name}_{counter:05}_.png"
         pnginfo = _build_pnginfo(prompt=prompt, workflow=workflow)
         grid_pil.save(os.path.join(full_folder, fname), "PNG", pnginfo=pnginfo)
     except Exception as e:

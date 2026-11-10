@@ -1,0 +1,841 @@
+<!doctype html>
+<!-- Standalone XY workspace served by ComfyUI; every image and metadata record belongs to one execution cell. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="same-origin">
+<title>XY report · Pixaroma</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --background: #19191b;
+    --surface: #222224;
+    --raised: #2b2b2e;
+    --line: #414145;
+    --muted: #b6b3b0;
+    --text: #f3eee9;
+    --accent: #ff8868;
+    --cell-size: 240px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  * { box-sizing: border-box; }
+  html { scrollbar-gutter: stable; }
+  body { margin: 0; background: var(--background); color: var(--text); }
+  button, input { font: inherit; }
+  button, .action {
+    min-height: 42px; padding: 9px 14px; border: 1px solid var(--line);
+    border-radius: 4px; background: var(--raised); color: var(--text); cursor: pointer;
+  }
+  button:hover, .action:hover { border-color: var(--accent); }
+  button:disabled { cursor: wait; opacity: .6; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+  [hidden] { display: none !important; }
+  h1, h2, h3, p { margin: 0; }
+  h1 { font-size: clamp(25px, 3vw, 36px); letter-spacing: -.035em; font-weight: 650; }
+  h2 { font-size: 18px; font-weight: 600; }
+  h3 { font-size: 15px; font-weight: 600; }
+  .muted { color: var(--muted); }
+  .eyebrow { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+  .skip-link { position: fixed; left: 12px; top: -100px; z-index: 20; padding: 12px; background: var(--surface); }
+  .skip-link:focus { top: 12px; }
+  .page-header { padding: 25px clamp(16px, 3vw, 42px) 22px; border-bottom: 1px solid var(--line); }
+  .heading-row { display: flex; align-items: baseline; gap: 15px; flex-wrap: wrap; }
+  #plot-name { overflow-wrap: anywhere; }
+  .report-link { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 18px; max-width: 1100px; }
+  .report-link label { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+  #report-url { min-width: 0; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--background); color: var(--text); }
+  .link-hint { margin-top: 7px; font-size: 12px; color: var(--muted); }
+  .status-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; padding: 14px clamp(16px, 3vw, 42px); background: var(--surface); border-bottom: 1px solid var(--line); }
+  .progress-group { display: flex; align-items: center; gap: 12px; }
+  #progress-count { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 650; }
+  progress { accent-color: var(--accent); width: 120px; height: 7px; }
+  #connection-status { flex: 1 1 240px; color: var(--muted); }
+  #connection-status[data-state="error"] { color: #ffba9f; }
+  #retry { min-height: 36px; padding: 6px 12px; }
+  .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
+  .comparison { min-width: 0; padding: 24px clamp(16px, 3vw, 42px) 32px; }
+  .workspace-toolbar { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-bottom: 15px; }
+  .scale-control { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--muted); }
+  #cell-size { width: 120px; accent-color: var(--accent); min-height: 30px; }
+  .axis-summary { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 0 0 14px; color: var(--muted); overflow-wrap: anywhere; }
+  .axis-summary strong { color: var(--text); font-weight: 600; }
+  .gallery { display: flex; flex-wrap: wrap; align-items: stretch; gap: 12px; min-width: 0; }
+  .gallery-tile { position: relative; flex: 0 1 var(--cell-size); min-width: 0; max-width: 100%; border: 1px solid var(--line); background: #1c1c1e; overflow-wrap: anywhere; }
+  .cell { display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; min-width: 0; padding: 0; border: 0; border-radius: 0; background: transparent; text-align: left; }
+  .cell:not(.received) { min-height: var(--cell-size); }
+  .cell-zoom { position: absolute; top: 8px; right: 8px; z-index: 1; display: grid; place-items: center; width: 44px; min-height: 44px; padding: 10px; background: #222224; color: var(--text); }
+  .cell-zoom svg { width: 20px; height: 20px; pointer-events: none; }
+  .cell-zoom:disabled { cursor: default; }
+  .cell:hover { background: #292729; }
+  .cell[aria-pressed="true"] { box-shadow: inset 0 0 0 3px var(--accent); }
+  .cell:focus-visible { outline-offset: -4px; z-index: 1; }
+  .cell img { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: contain; padding: 5px; }
+  .cell-state { display: block; width: 100%; padding: 9px 12px; color: var(--muted); font-size: 12px; }
+  .cell-axis { display: block; width: 100%; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .cell:not(.received) .cell-state { padding: 25px 18px; text-align: center; }
+  .cell[aria-pressed="true"] .cell-state { color: var(--accent); }
+  #empty-message { padding: 32px 0; max-width: 60ch; color: var(--muted); }
+  .workspace-note { margin-top: 13px; font-size: 12px; color: var(--muted); }
+  .inspector { position: sticky; top: 0; max-height: 100vh; overflow: auto; padding: 26px 22px 35px; border-left: 1px solid var(--line); background: var(--surface); min-height: 460px; }
+  .inspector-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  #inspector-empty { color: var(--muted); max-width: 34ch; }
+  #selected-coordinate { color: var(--accent); font-size: 12px; font-variant-numeric: tabular-nums; }
+  #cell-axes { display: grid; gap: 14px; margin: 20px 0; }
+  dt { color: var(--muted); font-size: 12px; }
+  dd { margin: 3px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  #cell-facts { margin-top: 10px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  #metadata-state { margin: 16px 0; color: var(--muted); }
+  #metadata-retry { margin-bottom: 15px; }
+  #open-original { display: inline-flex; align-items: center; text-decoration: none; color: var(--accent); }
+  .node-record { margin-top: 20px; padding-top: 17px; border-top: 1px solid var(--line); }
+  .node-record .node-class { margin-top: 3px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .node-record h3 { overflow-wrap: anywhere; }
+  .node-record dl { margin: 12px 0 0; }
+  .node-record dl > div { margin-bottom: 12px; }
+  .node-record dd { line-height: 1.6; }
+  details { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+  summary { cursor: pointer; min-height: 35px; padding: 4px 0; color: var(--accent); }
+  pre { margin: 8px 0; padding: 12px; background: var(--background); border: 1px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; tab-size: 2; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+  body.lightbox-open { overflow: hidden; }
+  .lightbox { width: min(1400px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: clamp(12px, 2vw, 24px); border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); }
+  .lightbox[open] { display: flex; flex-direction: column; gap: 12px; }
+  .lightbox::backdrop { background: rgb(10 9 9 / 90%); }
+  .lightbox-header, .lightbox-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 18px; min-width: 0; }
+  #lightbox-title { font-size: 18px; }
+  #lightbox-close { margin-left: auto; }
+  .lightbox-stage { position: relative; display: grid; place-items: center; width: 100%; height: min(68dvh, 900px); min-height: 100px; background: var(--background); }
+  #lightbox-image { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+  #lightbox-status { position: absolute; max-width: 50ch; padding: 16px; text-align: center; }
+  #lightbox-caption { flex: 1 1 240px; min-width: 0; max-height: 20dvh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .lightbox-navigation { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #lightbox-counter { font-variant-numeric: tabular-nums; }
+  @media (min-width: 1600px) { .workspace { grid-template-columns: minmax(0, 1fr) 420px; } }
+  @media (max-width: 1050px) {
+    .workspace { grid-template-columns: minmax(0, 1fr); }
+    .inspector { position: static; max-height: none; min-height: 250px; border-left: 0; border-top: 1px solid var(--line); padding: 24px clamp(16px, 3vw, 42px); }
+    #recorded-inputs { max-width: 900px; }
+  }
+  @media (max-width: 500px) {
+    .status-strip { gap: 9px 14px; }
+    progress { width: 90px; }
+    .report-link { grid-template-columns: minmax(0, 1fr); }
+    .report-link button { justify-self: start; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#comparison">Skip to comparison</a>
+<header class="page-header">
+  <div class="eyebrow">Pixaroma / Live report</div>
+  <div class="heading-row"><h1>XY comparison</h1><span id="plot-name" class="muted"></span></div>
+  <div class="report-link">
+    <label for="report-url">Full report URL</label>
+    <input id="report-url" type="text" readonly spellcheck="false" aria-describedby="url-hint">
+    <button id="copy-url" type="button">Copy report URL</button>
+  </div>
+  <p id="url-hint" class="link-hint">This URL may contain access credentials. Share only with trusted people. Reports stay available while cached by ComfyUI.</p>
+  <span id="copy-status" class="sr-only" role="status"></span>
+</header>
+<div class="status-strip">
+  <div class="progress-group"><span id="progress-count">0 / — cells</span><progress id="progress" value="0" max="1" aria-label="Received cells"></progress></div>
+  <span id="plot-status">Connecting</span>
+  <p id="connection-status" role="status" aria-live="polite">Connecting to the report…</p>
+  <button id="retry" type="button">Refresh now</button>
+</div>
+<main class="workspace">
+  <section id="comparison" class="comparison" aria-labelledby="comparison-title" tabindex="-1">
+    <div class="workspace-toolbar">
+      <h2 id="comparison-title">Image comparison</h2>
+      <label class="scale-control" for="cell-size">Image size <input id="cell-size" type="range" min="140" max="440" step="20" value="240"><output id="cell-size-value" for="cell-size">240 px</output></label>
+      <a href="#inspector">Go to cell inspector</a>
+    </div>
+    <p class="axis-summary"><span><strong>X</strong> <span id="x-name">—</span></span><span><strong>Y</strong> <span id="y-name">—</span></span></p>
+    <p id="empty-message">Images arrive one at a time. Select a thumbnail to inspect its recorded inputs, or use its zoom button to view the full image.</p>
+    <div id="image-gallery" class="gallery" role="group" aria-label="Execution images" tabindex="-1" hidden></div>
+    <p class="workspace-note">Original cell images only · first image of each execution batch · Thumbnails wrap to fit · Use the zoom button for full images</p>
+  </section>
+  <aside id="inspector" class="inspector" aria-labelledby="inspector-title" tabindex="-1">
+    <div class="inspector-heading"><h2 id="inspector-title">Cell inspector</h2><span id="selected-coordinate"></span></div>
+    <p id="inspector-empty">Select an image to see the exact inputs recorded for that execution. Pending cells can also be selected.</p>
+    <div id="selected-cell" hidden>
+      <a id="open-original" class="action" target="_blank" rel="noopener noreferrer" hidden>Open original PNG ↗</a>
+      <p id="cell-facts"></p>
+      <dl id="cell-axes"></dl>
+      <p id="metadata-state" role="status"></p>
+      <button id="metadata-retry" type="button" hidden>Retry metadata</button>
+      <div id="recorded-inputs"></div>
+    </div>
+  </aside>
+</main>
+<dialog id="lightbox" class="lightbox" aria-labelledby="lightbox-title" aria-describedby="lightbox-caption">
+  <header class="lightbox-header">
+    <h2 id="lightbox-title">Full image</h2>
+    <span id="lightbox-counter" role="status" aria-live="polite"></span>
+    <button id="lightbox-close" type="button" autofocus>Close</button>
+  </header>
+  <div class="lightbox-stage">
+    <img id="lightbox-image" alt="" hidden>
+    <p id="lightbox-status" role="status"></p>
+  </div>
+  <footer class="lightbox-footer">
+    <p id="lightbox-caption" tabindex="0"></p>
+    <nav class="lightbox-navigation" aria-label="Image pagination">
+      <button id="lightbox-previous" type="button">Previous</button>
+      <button id="lightbox-next" type="button">Next</button>
+      <button id="lightbox-retry" type="button" hidden>Retry image</button>
+      <a id="lightbox-original" target="_blank" rel="noopener noreferrer">Open original PNG ↗</a>
+    </nav>
+  </footer>
+</dialog>
+<noscript><p style="padding:24px">Enable JavaScript to load individual images and recorded metadata from ComfyUI.</p></noscript>
+<script>
+(() => {
+  "use strict";
+  const MAX_PLOT_CELLS = 10000;
+  const byId = (id) => document.getElementById(id);
+  const cells = new Map();
+  const state = {
+    manifest: null, selected: null, focused: "0:0", metadataKey: null,
+    metadataBusy: false, metadataRequested: false, refreshPromise: null,
+    stream: null, connected: false, closed: false, missing: false,
+    registrationTimer: null, registrationUntil: performance.now() + 5000,
+  };
+  state.lightboxKey = null;
+  state.lightboxReturnFocus = null;
+  state.lightboxFailed = false;
+  state.lightboxRequest = 0;
+  const pageUrl = new URL(location.href);
+  const manifestUrl = new URL(pageUrl.href);
+  manifestUrl.pathname = pageUrl.pathname.replace(/\/pixaroma\/xy-report\/([^/]+)\/?$/, "/pixaroma/api/xy_plot/reports/$1");
+  manifestUrl.hash = "";
+  byId("report-url").value = pageUrl.href;
+  byId("copy-url").addEventListener("click", copyReportUrl);
+  byId("report-url").addEventListener("click", (event) => event.target.select());
+  byId("retry").addEventListener("click", () => {
+    if (!state.connected) connectStream();
+    refreshSnapshot();
+  });
+  byId("metadata-retry").addEventListener("click", () => { state.metadataKey = null; queueMetadata(); });
+  byId("cell-size").addEventListener("input", (event) => {
+    document.documentElement.style.setProperty("--cell-size", `${event.target.value}px`);
+    byId("cell-size-value").textContent = `${event.target.value} px`;
+  });
+  window.addEventListener("online", () => { if (!state.connected) connectStream(); });
+  window.addEventListener("pagehide", () => {
+    state.closed = true;
+    state.stream?.close();
+    state.stream = null;
+    clearTimeout(state.registrationTimer);
+  });
+  window.addEventListener("pageshow", () => {
+    state.closed = false;
+    if (!state.stream && manifestUrl.pathname !== pageUrl.pathname) connectStream();
+  });
+  byId("image-gallery").addEventListener("keydown", moveCellFocus);
+  byId("lightbox-close").addEventListener("click", () => byId("lightbox").close());
+  byId("lightbox-previous").addEventListener("click", () => paginateLightbox(-1));
+  byId("lightbox-next").addEventListener("click", () => paginateLightbox(1));
+  byId("lightbox-retry").addEventListener("click", () => renderLightbox(true));
+  document.addEventListener("keydown", lightboxKeydown);
+  byId("lightbox").addEventListener("close", restoreLightboxFocus);
+  byId("lightbox").addEventListener("click", (event) => {
+    const box = byId("lightbox").getBoundingClientRect();
+    if (event.target === byId("lightbox") && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) byId("lightbox").close();
+  });
+  if (manifestUrl.pathname === pageUrl.pathname) {
+    setConnection("This page must be opened from a ComfyUI XY report URL.", true);
+    byId("retry").disabled = true;
+  } else {
+    connectStream();
+  }
+
+  function connectStream() {
+    state.stream?.close();
+    const url = new URL(manifestUrl);
+    url.pathname += "/events";
+    const source = new EventSource(url.href, { withCredentials: true });
+    state.stream = source;
+    state.connected = false;
+    setConnection("Connecting to live updates…");
+    source.onopen = () => {
+      if (state.stream !== source || state.closed) return;
+      state.connected = true;
+      setText(byId("retry"), "Refresh now");
+      if (state.missing) showMissingReport();
+      else updateConnectionStatus();
+    };
+    const receive = (event, apply) => {
+      if (state.stream !== source || state.closed) return;
+      try { apply(JSON.parse(event.data)); }
+      catch { setConnection("A live update could not be read. Use Refresh now to resync.", true); }
+    };
+    source.addEventListener("snapshot", event => receive(event, data => {
+      validateManifest(data);
+      state.missing = false;
+      clearTimeout(state.registrationTimer);
+      renderManifest(data);
+      retryFailedImages();
+    }));
+    source.addEventListener("update", event => receive(event, applyReportUpdate));
+    source.addEventListener("missing", event => receive(event, () => {
+      state.missing = true;
+      showMissingReport();
+    }));
+    source.onerror = () => {
+      if (state.stream !== source || state.closed) return;
+      state.connected = false;
+      setText(byId("retry"), "Reconnect");
+      setConnection(source.readyState === EventSource.CLOSED
+        ? "Live updates are unavailable. Restart ComfyUI after updating, check access, then choose Reconnect."
+        : "Live connection lost. Reconnecting automatically; received images are preserved.", true);
+    };
+  }
+
+  function showMissingReport() {
+    clearTimeout(state.registrationTimer);
+    if (!state.manifest && performance.now() < state.registrationUntil) {
+      setConnection("Waiting for report registration…");
+      state.registrationTimer = setTimeout(() => {
+        if (state.missing && state.connected) showMissingReport();
+      }, Math.max(1, state.registrationUntil - performance.now()));
+    } else {
+      setConnection("This report is missing or has expired. Cached images remain visible; live updates will resume if it is recreated.", true);
+    }
+  }
+
+  function updateConnectionStatus() {
+    if (!state.connected || state.missing) return;
+    setConnection(state.manifest?.status === "complete"
+      ? "All cells received. Live updates connected."
+      : state.manifest?.received ? "Live · waiting for the next cell." : "Live · waiting for the first cell.");
+  }
+
+  async function refreshSnapshot() {
+    if (state.refreshPromise || state.closed) return state.refreshPromise;
+    byId("retry").disabled = true;
+    const generation = state.manifest?.generation;
+    state.refreshPromise = (async () => {
+      try {
+        const { data } = await requestJson(manifestUrl);
+        if (state.closed) return;
+        validateManifest(data);
+        if (state.manifest && state.manifest.generation !== generation && data.generation !== state.manifest.generation) return;
+        state.missing = false;
+        clearTimeout(state.registrationTimer);
+        renderManifest(data);
+        retryFailedImages();
+      } catch (error) {
+        if (state.closed) return;
+        if (error.status === 404) { state.missing = true; showMissingReport(); }
+        else setConnection(error.status === 401 || error.status === 403
+          ? "Access denied. Check the report URL or sign in, then reconnect."
+          : "Could not refresh the report. Received images are preserved.", true);
+      } finally {
+        state.refreshPromise = null;
+        byId("retry").disabled = false;
+      }
+    })();
+    return state.refreshPromise;
+  }
+
+  async function queueMetadata() {
+    state.metadataRequested = true;
+    if (state.metadataBusy || state.closed) return;
+    state.metadataBusy = true;
+    try {
+      while (state.metadataRequested && !state.closed) {
+        state.metadataRequested = false;
+        await refreshSelectedMetadata();
+      }
+    } finally { state.metadataBusy = false; }
+  }
+
+  function retryFailedImages() {
+    for (const cell of cells.values()) if (cell.imageFailed) loadCellImage(cell);
+    if (byId("lightbox").open && state.lightboxFailed) renderLightbox(true);
+  }
+
+  async function requestJson(url) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(url, { signal: controller.signal, credentials: "same-origin", cache: "no-store" });
+      if (!response.ok) { const error = new Error("Request failed"); error.status = response.status; throw error; }
+      return { response, data: await response.json() };
+    } finally { clearTimeout(timeout); }
+  }
+
+  // Resolve against the manifest (not the page), retaining proxy prefixes and repeated auth parameters.
+  function resourceUrl(relative) {
+    const url = new URL(relative, manifestUrl);
+    if (url.origin !== pageUrl.origin || !["http:", "https:"].includes(url.protocol)) throw new Error("Invalid report resource origin");
+    for (const [key, value] of pageUrl.searchParams) url.searchParams.append(key, value);
+    return url;
+  }
+
+  function validateManifest(manifest) {
+    if (!manifest || !Number.isInteger(manifest.cols) || !Number.isInteger(manifest.rows) || manifest.cols < 1 || manifest.cols > MAX_PLOT_CELLS || manifest.rows < 1 || manifest.rows > MAX_PLOT_CELLS || manifest.cols * manifest.rows > MAX_PLOT_CELLS || !Array.isArray(manifest.cells)) throw new Error("Invalid report manifest");
+    const wrap = manifest.wrap;
+    if (wrap != null && (!["x", "y"].includes(wrap.axis) || !Number.isInteger(wrap.columns) || wrap.columns < 1 || wrap.columns > 100 || !Number.isInteger(wrap.count) || wrap.count < wrap.columns || wrap.count !== (wrap.axis === "x" ? manifest.cols : manifest.rows) || (wrap.axis === "x" ? manifest.rows : manifest.cols) !== 1)) throw new Error("Invalid report wrap layout");
+  }
+
+  function renderManifest(manifest) {
+    const previous = state.manifest;
+    const sameGeneration = previous && previous.generation === manifest.generation;
+    if (sameGeneration && (manifest.revision < previous.revision || manifest.context_revision < previous.context_revision)) return;
+    // Cell records live in the gallery map, not a second snapshot array.
+    const { cells: records, ...context } = manifest;
+    state.manifest = context;
+    if (!sameGeneration || previous.context_revision !== manifest.context_revision || previous.cols !== manifest.cols || previous.rows !== manifest.rows) buildGallery(manifest, sameGeneration);
+    for (const record of records) updateCell(record);
+    refreshReportDisplay();
+  }
+
+  function applyReportUpdate(update) {
+    if (!update || !Array.isArray(update.cells) || !Number.isInteger(update.revision) || !Number.isInteger(update.context_revision)) throw new Error("Invalid live update");
+    const current = state.manifest;
+    if (!current || update.generation !== current.generation || update.context_revision > current.context_revision) {
+      refreshSnapshot();
+      return;
+    }
+    if (update.context_revision < current.context_revision) return;
+    if (update.revision >= current.revision) {
+      for (const key of ["revision", "updated_at", "received", "total", "status"]) current[key] = update[key];
+    }
+    // Equal report revisions can contain different coalesced cell batches.
+    for (const record of update.cells) updateCell(record);
+    state.missing = false;
+    refreshReportDisplay();
+  }
+
+  function refreshReportDisplay() {
+    const manifest = state.manifest;
+    setText(byId("plot-name"), manifest.prefix || "");
+    setText(byId("x-name"), manifest.x_name || "Not varied");
+    setText(byId("y-name"), manifest.y_name || "Not varied");
+    setText(byId("progress-count"), `${manifest.received} / ${manifest.total} cells`);
+    setText(byId("plot-status"), ({ waiting: "Waiting", partial: "In progress", complete: "Complete" })[manifest.status] || "Waiting");
+    byId("progress").max = manifest.total || 1;
+    byId("progress").value = manifest.received;
+    byId("empty-message").hidden = true;
+    byId("image-gallery").hidden = false;
+    if (state.selected) renderSelectedCell();
+    if (byId("lightbox").open) renderLightbox();
+    updateConnectionStatus();
+    queueMetadata();
+  }
+
+  function buildGallery(manifest, preservePosition) {
+    const selected = preservePosition ? state.selected : null;
+    const focused = preservePosition ? state.focused : "0:0";
+    const restoreFocus = byId("image-gallery").contains(document.activeElement);
+    if (!preservePosition && byId("lightbox").open) byId("lightbox").close();
+    cells.clear();
+    state.selected = null;
+    state.metadataKey = null;
+    state.focused = focused;
+    byId("selected-cell").hidden = true;
+    byId("inspector-empty").hidden = false;
+    byId("recorded-inputs").replaceChildren();
+    delete byId("cell-axes").dataset.cell;
+    const content = document.createDocumentFragment();
+    for (let yi = 0; yi < manifest.rows; yi++) {
+      for (let xi = 0; xi < manifest.cols; xi++) {
+        const tile = element("article", "gallery-tile");
+        const button = element("button", "cell");
+        button.type = "button";
+        button.dataset.xi = String(xi);
+        button.dataset.yi = String(yi);
+        button.setAttribute("aria-pressed", "false");
+        button.setAttribute("aria-label", cellDescription(xi, yi, "Inspect pending inputs"));
+        const zoom = zoomButton(xi, yi);
+        const status = element("span", "cell-state", "Pending execution");
+        const labels = [];
+        if (manifest.x_labels.length) labels.push(`X · ${manifest.x_name || "Value"}: ${axisLabel("x", xi)}`);
+        if (manifest.y_labels.length) labels.push(`Y · ${manifest.y_name || "Value"}: ${axisLabel("y", yi)}`);
+        button.append(element("span", "cell-axis", labels.join("\n") || `Image ${yi * manifest.cols + xi + 1}`), status);
+        button.addEventListener("click", () => selectCell(xi, yi));
+        const cell = { xi, yi, index: yi * manifest.cols + xi, tile, button, zoom, status, record: null, image: null, imageFailed: false };
+        const focus = () => {
+          const previous = cells.get(state.focused);
+          if (previous) { previous.button.tabIndex = -1; previous.zoom.tabIndex = -1; }
+          button.tabIndex = 0;
+          zoom.tabIndex = 0;
+          state.focused = `${xi}:${yi}`;
+        };
+        button.addEventListener("focus", focus);
+        zoom.addEventListener("focus", focus);
+        button.tabIndex = zoom.tabIndex = `${xi}:${yi}` === focused ? 0 : -1;
+        cells.set(`${xi}:${yi}`, cell);
+        tile.append(button, zoom);
+        content.append(tile);
+      }
+    }
+    byId("image-gallery").replaceChildren(content);
+    const focusCell = cells.get(focused) || cells.values().next().value;
+    state.focused = `${focusCell.xi}:${focusCell.yi}`;
+    focusCell.button.tabIndex = focusCell.zoom.tabIndex = 0;
+    if (selected && cells.has(selected)) {
+      state.selected = selected;
+      cells.get(selected).button.setAttribute("aria-pressed", "true");
+    }
+    if (restoreFocus) focusCell.button.focus();
+  }
+
+  function zoomButton(xi, yi) {
+    const button = element("button", "cell-zoom");
+    button.type = "button";
+    button.dataset.xi = String(xi);
+    button.dataset.yi = String(yi);
+    button.disabled = true;
+    button.hidden = true;
+    button.setAttribute("aria-label", cellDescription(xi, yi, "View full image"));
+    button.title = "View full image";
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2");
+    svg.setAttribute("aria-hidden", "true");
+    const circle = document.createElementNS(svg.namespaceURI, "circle");
+    circle.setAttribute("cx", "10"); circle.setAttribute("cy", "10"); circle.setAttribute("r", "6");
+    const path = document.createElementNS(svg.namespaceURI, "path");
+    path.setAttribute("d", "M14.5 14.5 21 21 M10 7v6 M7 10h6");
+    svg.append(circle, path);
+    button.append(svg);
+    button.addEventListener("click", () => openLightbox(`${xi}:${yi}`, button));
+    return button;
+  }
+
+  function openLightbox(key, trigger) {
+    const cell = cells.get(key);
+    if (!cell?.record) return;
+    state.lightboxKey = key;
+    state.lightboxReturnFocus = trigger;
+    selectCell(cell.xi, cell.yi);
+    renderLightbox();
+    byId("lightbox").showModal();
+    document.body.classList.add("lightbox-open");
+  }
+
+  function renderLightbox(force = false) {
+    const cell = cells.get(state.lightboxKey);
+    if (!cell?.record) {
+      if (byId("lightbox").open) byId("lightbox").close();
+      return;
+    }
+    const received = [...cells.values()].filter(item => item.record);
+    const index = received.indexOf(cell);
+    setText(byId("lightbox-counter"), `${index + 1} / ${received.length} images`);
+    setText(byId("lightbox-title"), `Full image · X ${cell.xi + 1} / Y ${cell.yi + 1}`);
+    const caption = [`${cell.record.width} × ${cell.record.height} px`];
+    if (state.manifest.x_labels.length) caption.push(`X · ${state.manifest.x_name || "Value"}: ${axisLabel("x", cell.xi)}`);
+    if (state.manifest.y_labels.length) caption.push(`Y · ${state.manifest.y_name || "Value"}: ${axisLabel("y", cell.yi)}`);
+    setText(byId("lightbox-caption"), caption.join("\n"));
+    byId("lightbox-previous").disabled = index === 0;
+    byId("lightbox-next").disabled = index === received.length - 1;
+    const url = resourceUrl(cell.record.image_url).href;
+    byId("lightbox-original").href = url;
+    const image = byId("lightbox-image");
+    if (force || image.dataset.url !== url) {
+      state.lightboxFailed = false;
+      byId("lightbox-retry").hidden = true;
+      setText(byId("lightbox-status"), "Loading original image…");
+      loadLightboxImage(url, cellDescription(cell.xi, cell.yi, "Full execution image"));
+    }
+  }
+
+  function loadLightboxImage(url, description) {
+    const previous = byId("lightbox-image");
+    const image = document.createElement("img");
+    image.id = "lightbox-image";
+    image.hidden = true;
+    image.alt = description;
+    image.dataset.url = url;
+    const request = ++state.lightboxRequest;
+    image.addEventListener("load", () => {
+      if (request !== state.lightboxRequest || !byId("lightbox").open) return;
+      image.hidden = false;
+      state.lightboxFailed = false;
+      byId("lightbox-retry").hidden = true;
+      setText(byId("lightbox-status"), "");
+    });
+    image.addEventListener("error", () => {
+      if (request !== state.lightboxRequest || !byId("lightbox").open) return;
+      state.lightboxFailed = true;
+      byId("lightbox-retry").hidden = false;
+      setText(byId("lightbox-status"), "The original image is unavailable. Retry or choose another image.");
+    });
+    previous.replaceWith(image);
+    previous.removeAttribute("src");
+    image.src = url;
+  }
+
+  function paginateLightbox(direction) {
+    const received = [...cells.values()].filter(cell => cell.record);
+    const index = received.findIndex(cell => `${cell.xi}:${cell.yi}` === state.lightboxKey);
+    const cell = received[index + direction];
+    if (!cell) return;
+    state.lightboxKey = `${cell.xi}:${cell.yi}`;
+    selectCell(cell.xi, cell.yi);
+    renderLightbox();
+  }
+
+  function lightboxKeydown(event) {
+    const dialog = byId("lightbox");
+    if (!dialog.open) return;
+    if (event.key === "Tab" && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      const controls = [...dialog.querySelectorAll("button:not(:disabled),a[href],[tabindex='0']")].filter(control => control.getClientRects().length);
+      const first = controls[0], last = controls.at(-1);
+      const outside = !dialog.contains(document.activeElement);
+      if (event.shiftKey && (outside || document.activeElement === first)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (outside || document.activeElement === last)) {
+        event.preventDefault();
+        first.focus();
+      }
+      return;
+    }
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      paginateLightbox(event.key === "ArrowLeft" ? -1 : 1);
+    }
+  }
+
+  function restoreLightboxFocus() {
+    if (byId("lightbox").open || state.lightboxKey === null) return;
+    state.lightboxRequest++;
+    const trigger = state.lightboxReturnFocus;
+    state.lightboxKey = null;
+    state.lightboxReturnFocus = null;
+    state.lightboxFailed = false;
+    document.body.classList.remove("lightbox-open");
+    const image = byId("lightbox-image");
+    image.hidden = true;
+    image.removeAttribute("src");
+    delete image.dataset.url;
+    if (trigger?.isConnected && !trigger.disabled && trigger.getClientRects().length) trigger.focus({ preventScroll: true });
+    else byId("image-gallery").focus({ preventScroll: true });
+  }
+
+  function updateCell(record) {
+    const cell = cells.get(`${record.xi}:${record.yi}`);
+    if (!cell) return;
+    if (cell.record && cell.record.revision >= record.revision) return;
+    cell.record = record;
+    cell.zoom.disabled = false;
+    cell.zoom.hidden = false;
+    cell.button.classList.add("received");
+    cell.button.dataset.revision = String(record.revision);
+    cell.button.setAttribute("aria-label", cellDescription(record.xi, record.yi, "Inspect recorded inputs"));
+    if (!cell.image) {
+      cell.image = document.createElement("img");
+      cell.image.loading = "lazy";
+      cell.image.decoding = "async";
+      cell.image.alt = cellDescription(record.xi, record.yi, "Execution image");
+      cell.image.addEventListener("load", () => {
+        cell.imageFailed = false;
+        cell.image.hidden = false;
+        cell.zoom.hidden = false;
+        setText(cell.status, `${cell.record.width} × ${cell.record.height} · Inspect inputs`);
+      });
+      cell.image.addEventListener("error", () => {
+        cell.imageFailed = true;
+        cell.image.hidden = true;
+        cell.zoom.hidden = true;
+        setText(cell.status, "Image unavailable · use Refresh now to retry");
+      });
+      cell.button.prepend(cell.image);
+    }
+    loadCellImage(cell);
+  }
+
+  function loadCellImage(cell) {
+    cell.imageFailed = false;
+    cell.image.hidden = false;
+    setText(cell.status, `${cell.record.width} × ${cell.record.height} · Loading image…`);
+    cell.image.src = resourceUrl(cell.record.image_url).href;
+  }
+
+  function selectCell(xi, yi) {
+    const key = `${xi}:${yi}`;
+    if (state.selected !== key) {
+      const previous = cells.get(state.selected);
+      if (previous) previous.button.setAttribute("aria-pressed", "false");
+      state.selected = key;
+      state.metadataKey = null;
+      byId("recorded-inputs").replaceChildren();
+    }
+    cells.get(key).button.setAttribute("aria-pressed", "true");
+    renderSelectedCell();
+    queueMetadata();
+  }
+
+  function renderSelectedCell() {
+    const cell = cells.get(state.selected);
+    if (!cell) return;
+    byId("inspector-empty").hidden = true;
+    byId("selected-cell").hidden = false;
+    setText(byId("selected-coordinate"), `X ${cell.xi + 1} / Y ${cell.yi + 1}`);
+    const axes = byId("cell-axes");
+    if (axes.dataset.cell !== state.selected) {
+      axes.dataset.cell = state.selected;
+      axes.replaceChildren(axisDefinition("x", cell.xi), axisDefinition("y", cell.yi));
+    }
+    byId("open-original").hidden = !cell.record;
+    if (!cell.record) {
+      setText(byId("cell-facts"), "Pending execution");
+      setText(byId("metadata-state"), "This cell has not arrived yet. Its image and recorded inputs will appear here automatically.");
+      byId("metadata-retry").hidden = true;
+      return;
+    }
+    byId("open-original").href = resourceUrl(cell.record.image_url).href;
+    setText(byId("cell-facts"), `${cell.record.width} × ${cell.record.height} px · Revision ${cell.record.revision} · Received ${formatTime(cell.record.received_at)}`);
+    const matchingMetadata = state.metadataKey === metadataKey(cell);
+    byId("recorded-inputs").hidden = !matchingMetadata;
+    if (!matchingMetadata) setText(byId("metadata-state"), "Loading recorded inputs for this revision…");
+  }
+
+  async function refreshSelectedMetadata() {
+    const cell = cells.get(state.selected);
+    if (!cell?.record) return;
+    const key = metadataKey(cell);
+    if (state.metadataKey === key) return;
+    const revision = cell.record.revision;
+    const selected = state.selected;
+    const generation = state.manifest.generation;
+    const isCurrent = () => !state.closed && state.selected === selected && cells.get(selected) === cell && state.manifest?.generation === generation && cell.record.revision === revision;
+    byId("metadata-retry").hidden = true;
+    try {
+      const { data } = await requestJson(resourceUrl(cell.record.metadata_url));
+      if (!isCurrent()) return;
+      if (data.generation !== generation || data.revision !== revision) {
+        await refreshSnapshot();
+        return;
+      }
+      byId("recorded-inputs").hidden = false;
+      renderMetadata(data);
+      state.metadataKey = key;
+      setText(byId("metadata-state"), data.metadata_error ? `${data.metadata_error}. The original image is still available.` : "Recorded for this cell, not the current live graph.");
+    } catch (error) {
+      if (!isCurrent()) return;
+      if (error.status === 409) {
+        setText(byId("metadata-state"), "This cell was re-executed. Refreshing its image and recorded inputs…");
+        await refreshSnapshot();
+        return;
+      }
+      setText(byId("metadata-state"), error.status === 404 ? "Recorded inputs are unavailable; this cell or session may have expired. Retry to check again." : "Could not load recorded inputs. Use Retry recorded inputs to try again.");
+      byId("metadata-retry").hidden = false;
+    }
+  }
+
+  function renderMetadata(metadata) {
+    const container = byId("recorded-inputs");
+    const openDetails = new Set([...container.querySelectorAll("details[open]")].map((detail) => detail.dataset.key));
+    const focusedKey = container.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+    const content = document.createDocumentFragment();
+    const prompt = metadata.prompt;
+    const workflow = metadata.workflow;
+    if (prompt && typeof prompt === "object" && !Array.isArray(prompt)) {
+      const workflowNodes = Array.isArray(workflow?.nodes) ? workflow.nodes : [];
+      for (const [id, node] of Object.entries(prompt)) {
+        if (!node || typeof node !== "object") continue;
+        const workflowNode = workflowNodes.find((item) => String(item.id) === id);
+        const section = element("section", "node-record");
+        const title = node._meta?.title || workflowNode?.title || node.class_type || `Node ${id}`;
+        section.append(element("h3", "", title), element("p", "node-class", `${node.class_type || "Node"} · #${id}`));
+        const inputs = document.createElement("dl");
+        for (const [name, value] of Object.entries(node.inputs || {})) {
+          if (value !== null && !["string", "number", "boolean"].includes(typeof value)) continue;
+          const pair = document.createElement("div");
+          pair.append(element("dt", "", name), element("dd", "", value === null ? "null" : String(value)));
+          inputs.append(pair);
+        }
+        if (!inputs.childElementCount) section.append(element("p", "muted", "No scalar inputs recorded. Connections and structured values are in the raw prompt below."));
+        else section.append(inputs);
+        content.append(section);
+      }
+    }
+    if (!content.childNodes.length) content.append(element("p", "muted", "No execution prompt was recorded for this cell."));
+    content.append(jsonDetails("prompt", "Raw execution prompt", prompt, openDetails), jsonDetails("workflow", "Recorded workflow JSON", workflow, openDetails), jsonDetails("metadata", "Full cell metadata JSON", metadata, openDetails));
+    container.replaceChildren(content);
+    if (focusedKey) [...container.querySelectorAll("summary")].find((summary) => summary.dataset.focusKey === focusedKey)?.focus({ preventScroll: true });
+  }
+
+  function jsonDetails(key, label, value, openDetails) {
+    const details = document.createElement("details");
+    details.dataset.key = key;
+    const summary = element("summary", "", label);
+    summary.dataset.focusKey = key;
+    const pre = document.createElement("pre");
+    let rendered = false;
+    const fill = () => {
+      if (rendered || !details.open) return;
+      pre.textContent = value == null ? "Not recorded." : JSON.stringify(value, null, 2);
+      rendered = true;
+    };
+    details.append(summary, pre);
+    details.addEventListener("toggle", fill);
+    details.open = openDetails.has(key);
+    fill();
+    return details;
+  }
+
+  function moveCellFocus(event) {
+    const button = event.target.closest("button.cell,button.cell-zoom");
+    if (!button || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const cell = cells.get(`${button.dataset.xi}:${button.dataset.yi}`);
+    if (!cell) return;
+    const firstTop = cells.values().next().value.tile.offsetTop;
+    let columns = 0;
+    for (const item of cells.values()) { if (item.tile.offsetTop !== firstTop) break; columns++; }
+    const rowStart = Math.floor(cell.index / columns) * columns;
+    let index = cell.index;
+    if (event.key === "ArrowRight") index++;
+    else if (event.key === "ArrowLeft") index--;
+    else if (event.key === "ArrowDown") index = Math.min(cells.size - 1, index + columns);
+    else if (event.key === "ArrowUp") index -= columns;
+    else if (event.key === "Home") index = rowStart;
+    else if (event.key === "End") index = Math.min(cells.size, rowStart + columns) - 1;
+    else return;
+    event.preventDefault();
+    const target = cells.get(`${index % state.manifest.cols}:${Math.floor(index / state.manifest.cols)}`);
+    if (target) (button.classList.contains("cell-zoom") && !target.zoom.disabled ? target.zoom : target.button).focus();
+  }
+
+  function axisLabel(axis, index) { return String(state.manifest[`${axis}_labels`]?.[index] ?? `Value ${index + 1}`); }
+  function axisDefinition(axis, index) {
+    const pair = document.createElement("div");
+    pair.append(element("dt", "", `${axis.toUpperCase()} · ${state.manifest[`${axis}_name`] || "Not varied"}`), element("dd", "", axisLabel(axis, index)));
+    return pair;
+  }
+  function cellDescription(xi, yi, action) { return `${action}. X ${xi + 1}: ${axisLabel("x", xi)}; Y ${yi + 1}: ${axisLabel("y", yi)}`; }
+  function metadataKey(cell) { return `${state.manifest.generation}:${cell.xi}:${cell.yi}:${cell.record.revision}`; }
+  function formatTime(value) { const date = new Date(value); return Number.isNaN(date.getTime()) ? String(value || "unknown time") : date.toLocaleString(); }
+  function setText(target, value) { const text = String(value); if (target.textContent !== text) target.textContent = text; }
+  function setConnection(message, error = false) { setText(byId("connection-status"), message); byId("connection-status").dataset.state = error ? "error" : "live"; }
+  function element(tag, className = "", text) { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; }
+
+  async function copyReportUrl() {
+    try {
+      await navigator.clipboard.writeText(pageUrl.href);
+      setText(byId("copy-status"), "Report URL copied.");
+      setText(byId("copy-url"), "Copied");
+      setTimeout(() => setText(byId("copy-url"), "Copy report URL"), 2000);
+    } catch {
+      byId("report-url").focus();
+      byId("report-url").select();
+      setText(byId("copy-status"), "Copy is unavailable here. The full URL is selected; use your browser’s Copy command.");
+    }
+  }
+})();
+</script>
+</body>
+</html>

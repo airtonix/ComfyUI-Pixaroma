@@ -9,6 +9,7 @@
 import { app } from "/scripts/app.js";
 import { api } from "/scripts/api.js";
 import { getSweepProvider, sweepProviderFor } from "../shared/sweep_targets.mjs";
+import { planPlotLayout } from "./layout.mjs";
 
 export const STATE_PROP = "xyPlotState";
 export const STATE_VERSION = 1;
@@ -43,6 +44,8 @@ export function defaultState() {
     lockSeed: true,
     drawLabels: true,
     saveCells: false,
+    wrapGrid: false,
+    wrapColumns: 4,
     theme: "dark",          // grid color theme: "dark" | "light" | "mono"
     saveMaxSize: "4096",    // Save-button export size: "2048"|"4096"|"8192"|"full"
   };
@@ -686,9 +689,5 @@ export function axisLabels(axis) {
 export function computeCounts(state) {
   const xs = axisReady(state.x) ? resolveAxisValues(state.x) : [];
   const ys = axisReady(state.y) ? resolveAxisValues(state.y) : [];
-  const cols = xs.length || (ys.length ? 1 : 0);
-  const rows = ys.length || (xs.length ? 1 : 0);
-  const hasPlot = xs.length > 0 || ys.length > 0;
-  const total = hasPlot ? (cols || 1) * (rows || 1) : 0;
-  return { cols, rows, total, hasPlot };
+  return planPlotLayout(xs.length, ys.length, state);
 }

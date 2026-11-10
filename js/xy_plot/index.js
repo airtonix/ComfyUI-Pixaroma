@@ -12,6 +12,9 @@ import { isQueueLoopActive, runQueueLoop, feedsOnlyInactiveSwitch } from "../sha
 import { sweepProviderFor, anyProviderOwns } from "../shared/sweep_targets.mjs";
 import { isGraphLoading } from "../shared/graph_loading.mjs";
 import { installNodeAccent, registerNodeAccent } from "../shared/node_settings.mjs";
+import { getFilenamePrefix as prefixOf, getFilenameSweeps, recordFilenameExecution } from "./filename.mjs";
+import { prepareLiveReport } from "./report.mjs";
+import { planPlotLayout } from "./layout.mjs";
 
 const NODE = "PixaromaXYPlot";
 // MIN_W is set so the 3 natural-width toggles (Lock seed / Draw labels / Save
@@ -24,11 +27,6 @@ let _sessionCounter = 0;
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
-function prefixOf(node) {
-  const w = node.widgets?.find((x) => x && x.name === "filename_prefix");
-  const v = (w && typeof w.value === "string") ? w.value.trim() : "";
-  return v || "xy_plot";
-}
 
 function isSeedAxis(axis) {
   return axis && (axis.widgetName === "seed" || axis.widgetName === "noise_seed");
@@ -166,8 +164,12 @@ function makeHandlers(node, root) {
       node._pixXyCancelConfirm = null;
       if (!ok) return;
       resetState(node);
-      try { node._pixXyGrid?.clear(); } catch (_e) {}
       node._pixXyLastGrid = null;
+      node._pixXyReport = null;
+      try { node._pixXyGrid?.clear(); } catch (_e) {}
+      node._pixXyExecPrompt = null;
+      node._pixXyExecWorkflow = null;
+      node._pixXyFilenameHistory = null;
       handlers.rerender();
       fitNode(node, root);
     },
@@ -211,7 +213,7 @@ app.registerExtension({
         node._pixXyFit = () => fitNode(node, root);   // called from grid.mjs on <img> load
         // DOM-only render (no auto-grow) for the load path so the saved size
         // is trusted and the workflow isn't falsely flagged modified (#18).
-        node._pixXyRenderOnly = () => renderBody(node, root, { rerender: handlers.rerender, growth: null, reset: handlers.reset, resetAxis: handlers.resetAxis });
+        node._pixXyRenderOnly = () => renderBody(node, root, { rerender: handlers.rerender, growth: null, valueGrowth: handlers.growth, reset: handlers.reset, resetAxis: handlers.resetAxis });
 
         // The axis heads-up lines describe ANOTHER node's state (which LoRA rows are
         // switched on), so they can go stale with nothing to re-render them. Refresh
@@ -327,6 +329,8 @@ app.registerExtension({
       this._pixXyGridDims = null;
       this._pixXyExecPrompt = null;
       this._pixXyExecWorkflow = null;
+      this._pixXyFilenameHistory = null;
+      this._pixXyReport = null;
       if (origRemoved) return origRemoved.apply(this, arguments);
     };
   },
@@ -502,11 +506,14 @@ app.graphToPrompt = async function (...args) {
           sessionId: run.sessionId,
           xi: run.xi, yi: run.yi, cols: run.cols, rows: run.rows,
           xLabels: run.xLabels, yLabels: run.yLabels,
+          wrap: run.wrap,
           xName: run.xName, yName: run.yName,
           drawLabels: state.drawLabels !== false,
+          lockSeed: run.lockSeed,
           saveCells: state.saveCells === true,
           theme: state.theme || "dark",
           prefix: prefixOf(node),
+          filenameSweeps: getFilenameSweeps(node),
         };
         entry.inputs = entry.inputs || {};
         entry.inputs.XYPlotState = JSON.stringify(payload);
@@ -574,11 +581,12 @@ app.queuePrompt = async function (...args) {
     const yValues = axisReady(state.y) ? resolveAxisValues(state.y) : [];
     const xs = xValues.length ? xValues : [undefined];
     const ys = yValues.length ? yValues : [undefined];
-    const cols = xs.length, rows = ys.length, total = cols * rows;
+    const layout = planPlotLayout(xValues.length, yValues.length, state);
+    const { cols, rows, total, wrap } = layout;
 
     if (total > 25) {
       const ok = await pixConfirmSimple(
-        `This will run your workflow <b>${total}</b> times (${cols} × ${rows}). That can take a while. Continue?`,
+        `This will run your workflow <b>${total}</b> times (${layout.displayCols} × ${layout.displayRows}${wrap ? ", wrapped" : ""}). That can take a while. Continue?`,
         (cancel) => { node._pixXyCancelConfirm = cancel; },
       );
       node._pixXyCancelConfirm = null;
@@ -595,13 +603,27 @@ app.queuePrompt = async function (...args) {
     const xName = axisReady(state.x) ? axisDisplayName(state.x, node) : "";
     const yName = axisReady(state.y) ? axisDisplayName(state.y, node) : "";
 
+    try {
+      const ready = await prepareLiveReport(node, {
+        session_id: sessionId, cols, rows, wrap,
+        x_name: xName, y_name: yName, x_labels: xLabels, y_labels: yLabels,
+        prefix: prefixOf(node), lock_seed: lockSeed,
+      });
+      if (!ready) return;
+    } catch (error) {
+      console.error("Pixaroma.XYPlot: report creation failed", error);
+      app.extensionManager?.toast?.add?.({
+        severity: "error", summary: "XY report", detail: error.message, life: 8000,
+      });
+      return;
+    }
     return await runQueueLoop(async () => {
       let last;
       try {
         for (let yi = 0; yi < rows; yi++) {
           for (let xi = 0; xi < cols; xi++) {
             node._pixXyRun = {
-              sessionId, xi, yi, cols, rows,
+              sessionId, xi, yi, cols, rows, wrap,
               xValue: xs[xi], yValue: ys[yi],
               xLabels, yLabels, xName, yName,
               lockSeed, seedMap,
@@ -641,10 +663,9 @@ api.addEventListener("executed", ({ detail }) => {
     // been bumped by 'control after generate: randomize' by save-click time).
     // Runtime-only - never persist to node.properties (Preview Pattern #13).
     const meta = f._pixaroma_meta;
-    if (meta && typeof meta === "object") {
-      node._pixXyExecPrompt = meta.prompt || null;
-      node._pixXyExecWorkflow = meta.workflow || null;
-    }
+    node._pixXyExecPrompt = meta?.prompt || null;
+    node._pixXyExecWorkflow = meta?.workflow || null;
+    recordFilenameExecution(node, node._pixXyLastGrid.sessionId, node._pixXyExecPrompt);
     node._pixXyGrid?.setGrid(url);
     // The node's actual resize-to-fit happens in the grid <img> onload handler
     // (grid.mjs -> _pixXyFit); here we just request a repaint.

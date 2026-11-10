@@ -8,6 +8,8 @@
 import { app } from "/scripts/app.js";
 import { pixApiUrl } from "../shared/api_url.mjs";
 import { readState } from "./core.mjs";
+import { requestFilenamePlan } from "./filename.mjs";
+import { buildReportLink, getLiveReport } from "./report.mjs";
 
 function el(tag, cls, txt) {
   const e = document.createElement(tag);
@@ -29,11 +31,6 @@ function toast(summary, detail, severity = "info") {
   } catch (_e) {}
 }
 
-function prefixOf(node) {
-  const w = node.widgets?.find((x) => x && x.name === "filename_prefix");
-  const v = (w && typeof w.value === "string") ? w.value.trim() : "";
-  return v || "xy_plot";
-}
 
 async function fetchGridBlob(node) {
   const last = node._pixXyLastGrid;
@@ -60,13 +57,13 @@ async function doCopy(node) {
 }
 
 function doOpen(node) {
-  const last = node._pixXyLastGrid;
-  if (!last || !last.url) { toast("XY Plot", "No grid to open yet.", "warn"); return; }
+  const report = getLiveReport(node);
+  if (!report) { toast("XY Plot", "Run a plot to open its live report.", "warn"); return; }
   // Use an <a target="_blank"> click rather than window.open(...,"noopener"):
   // Chrome returns null from window.open when "noopener" is set even on
   // success, which made the old code falsely report "popup blocked".
   const a = el("a");
-  a.href = last.url;
+  a.href = report.url;
   a.target = "_blank";
   a.rel = "noopener";
   document.body.appendChild(a);
@@ -107,11 +104,20 @@ async function fetchFullResBlob(node) {
 async function doSaveDisk(node) {
   const last = node._pixXyLastGrid;
   if (!last || !last.url) { toast("XY Plot", "No grid to save yet.", "warn"); return; }
-  const name = prefixOf(node).split("/").pop() + "_grid.png";
+  let name;
+  try {
+    const plan = await requestFilenamePlan(node);
+    if (plan.errors.length) throw new Error(plan.errors.join(" "));
+    if (!plan.disk_filename) throw new Error("Run the plot to resolve its grid dimensions before saving.");
+    name = plan.disk_filename;
+  } catch (error) {
+    toast("XY Plot", error.message || "Could not resolve the filename.", "error");
+    return;
+  }
 
-  if (window.showSaveFilePicker) {
-    // Open the picker FIRST, while the user-gesture activation is still valid - a
-    // slow full-res encode could otherwise outlast it and the picker would throw.
+  // Name planning uses the server clock. If its request outlasted transient
+  // activation, use the ordinary download path instead of opening a denied picker.
+  if (window.showSaveFilePicker && navigator.userActivation?.isActive !== false) {
     let handle;
     try {
       handle = await window.showSaveFilePicker({
@@ -173,13 +179,15 @@ async function doSaveOutput(node) {
   }
   const wantCells = state.saveCells === true;
   try {
+    const plan = await requestFilenamePlan(node);
+    if (plan.errors.length) throw new Error(plan.errors.join(" "));
     const resp = await fetch(pixApiUrl("/pixaroma/api/xy_plot/save"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         grid_filename: last.filename,
         session_id: last.sessionId || null,
-        filename_prefix: prefixOf(node),
+        filename_prefix: plan.resolvedPrefix,
         save_cells: wantCells,
         save_max_size: state.saveMaxSize || "4096",
         prompt, workflow,
@@ -194,8 +202,8 @@ async function doSaveOutput(node) {
     if (wantCells && !data.saved_cells) {
       toast("XY Plot", "Grid saved, but cells couldn't be saved (session expired) - re-run the plot to save cells.", "warn");
     }
-  } catch (_e) {
-    toast("XY Plot", "Save to output failed.", "error");
+  } catch (error) {
+    toast("XY Plot", error.message || "Save to output failed.", "error");
   }
 }
 
@@ -203,6 +211,7 @@ async function doSaveOutput(node) {
 // Returns an API object cached on the node by index.js.
 export function buildGridPreview(node, mount) {
   mount.innerHTML = "";
+  const updateReportLink = buildReportLink(node, mount);
   const box = el("div", "pix-xy-gridbox");
   const hint = el("div", "pix-xy-gridhint", "The labeled grid appears here after you hit Run.");
   const img = el("img", "pix-xy-gridimg");
@@ -281,23 +290,42 @@ export function buildGridPreview(node, mount) {
   node._pixXyCapRO = capRO;
 
   const bar = el("div", "pix-xy-savebar");
-  const mk = (label, fn) => { const b = el("div", "pix-xy-sb", label); b.addEventListener("click", () => fn(node)); return b; };
+  const mk = (label, fn) => {
+    const b = el("button", "pix-xy-sb", label);
+    b.type = "button";
+    for (const event of ["pointerdown", "keydown"]) b.addEventListener(event, (e) => e.stopPropagation());
+    b.addEventListener("click", () => fn(node));
+    return b;
+  };
   const bSave = mk("Save Disk", doSaveDisk);
   const bOut = mk("Save Output", doSaveOutput);
   const bCopy = mk("Copy", doCopy);
-  const bOpen = mk("Open", doOpen);
+  const bOpen = mk("Open report", doOpen);
   bar.appendChild(bSave); bar.appendChild(bOut); bar.appendChild(bCopy); bar.appendChild(bOpen);
   mount.appendChild(bar);
 
+  const refreshReport = () => {
+    updateReportLink();
+    const enabled = !!getLiveReport(node);
+    bOpen.disabled = !enabled;
+    bOpen.classList.toggle("disabled", !enabled);
+  };
+
   const setEnabled = (on) => {
-    [bSave, bOut, bCopy, bOpen].forEach((b) => b.classList.toggle("disabled", !on));
+    [bSave, bOut, bCopy].forEach((b) => {
+      b.disabled = !on;
+      b.classList.toggle("disabled", !on);
+    });
+    refreshReport();
   };
   setEnabled(false);
 
   let gridReq = 0;   // bumped per setGrid so a stale preload can't swap a stale grid
 
   return {
+    refreshReport,
     setGrid(url) {
+      refreshReport();
       // Preload the new grid, then swap the VISIBLE img only once it's ready.
       // This keeps the old grid (same size) on screen during a theme re-skin so
       // the <img> never collapses -> the node doesn't shrink-then-grow -> no

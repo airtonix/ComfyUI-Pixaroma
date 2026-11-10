@@ -16,6 +16,8 @@ import { registerNodeHelp } from "../shared/index.mjs";
 import { isGraphLoading } from "../shared/graph_loading.mjs";
 import { attachLineNumbers } from "../shared/line_numbers.mjs";
 import { placeZoomedPopup } from "../shared/popup_zoom.mjs";
+import { renderFilenameControl, closeFilenameBuilder } from "./filename_ui.mjs";
+import { normalizeWrapColumns } from "./layout.mjs";
 
 const BRAND = "#f66744";
 
@@ -42,19 +44,19 @@ const XY_HELP = {
       heading: "The value box adapts to what you pick",
       defs: [
         ["Number", "A `Range` (Start / End / Steps) or a `List` of values."],
-        ["Dropdown", "A checklist of VALUES to try, not a list of things to load at once: tick the samplers / models / loras you want to compare and each tick becomes one square."],
-        ["LoRA", "A checklist of lora files, or a number when you pick a weight. Loras get a section of their own further down, because they work one level differently from every other setting."],
+        ["Dropdown", "Click `Choose values…` to open a searchable, wheel-scrollable checklist. Tick the samplers / models / loras you want to compare: each tick becomes one square, not another thing loaded at once. Selected values stay listed in the node; use × to remove one."],
+        ["LoRA", "A popover checklist of lora files, or a number when you pick a weight. Loras get a section of their own further down, because they work one level differently from every other setting."],
         ["Prompt text", "`Full list` (one full prompt per line) or `Find & replace` (swap a word for each value). Long prompts wrap onto several rows, and the numbers down the left count your VALUES, so you can always see where the next one starts. The numbers are just a guide - you cannot type in them."],
       ],
       bullets: [
-        "The checklist shows ALL your installed options (every lora, sampler, checkpoint, etc.), not just the one in the node - that is how you compare against ones you have not loaded yet. The `now:` line under the picker shows what the node is set to right now.",
+        "The popover shows ALL your installed options (every lora, sampler, checkpoint, etc.), not just the one in the node. Filter and tick values, then click Done, press Escape, or click outside. Selections apply immediately. The `now:` line shows what the target node is set to right now.",
       ],
     },
     {
       heading: "Examples: what to pick for what you want",
       body:
         "Two things to hold on to and the rest follows. The picker chooses WHICH setting changes. The value box under it chooses WHAT that setting becomes, and you get one square per value, not all of them at once.\n\n"
-        + "So X and Y are how many settings can change at once, not how many things you can compare. One axis with 5 ticks gives you 5 squares, and you can go up to 100 on an axis. Use the second axis when you want a SECOND setting changing as well.\n\n"
+        + "So X and Y choose how many settings change at once, not how many things you can compare. One axis with 5 ticks gives 5 images. Numeric sweeps allow 100 values per axis. Model and prompt lists can be longer, with up to 10,000 images per plot. Use the second axis to change a SECOND setting.\n\n"
         + "Two habits worth having. Watch the counter above the buttons, because it tells you how many images you just asked for and 4 across by 3 down is 12 runs. And leave Lock seed on unless you are plotting the seed itself, or two things change at once and you cannot tell which one did it.",
       defs: [
         ["Which sampler suits this image?",
@@ -108,10 +110,31 @@ const XY_HELP = {
         ["Lock seed", "Keeps the seed the same for every square so the only thing changing is what you're testing. Turns off on its own if you're plotting the seed."],
         ["Draw labels", "Show the value labels and axis names on the grid."],
         ["Save cells", "Also save each square on its own, not just the whole grid."],
+        ["Wrap grid / Columns", "Available when only X or only Y has values. Set the number of columns, then Run: images fill left to right and wrap into more rows. The counter shows the display layout, but each value still runs only once. The saved grid and live report keep each image's original axis value."],
         ["Grid: Dark / Light / Mono", "The grid background and label style. Switching re-skins the grid you already have, instantly."],
         ["Reset X / Reset Y", "Clear just that one axis."],
         ["Reset XY", "Clear both axes and all selections, back to a fresh node."],
-        ["Save Disk / Save Output / Copy / Open", "Act on the finished grid: save it to your computer or to ComfyUI's output, copy it, or open it in a new tab."],
+        ["Save Disk / Save Output / Copy", "Save the grid to your computer or ComfyUI output, or copy the grid image."],
+        ["Open report", "Open the live HTML report. Its URL appears before the first cell finishes. Each image has its own X/Y values and recorded metadata."],
+      ],
+    },
+    {
+      heading: "Live HTML report",
+      bullets: [
+        "Press Run to get a clickable report URL immediately. The page uses your existing ComfyUI server and receives individual image updates over Server-Sent Events (SSE), without periodic polling.",
+        "Live updates reconnect automatically with a fresh snapshot to recover missed cells. Use Refresh now to resync manually or retry failed images.",
+        "Select an image to inspect its recorded inputs and workflow. The report does not use the generated grid PNG; each cell shows the first image in its batch.",
+        "Reports share the eight-plot memory cache. A ComfyUI restart or cache eviction expires old reports. If a run stops, received cells remain visible and missing cells stay pending.",
+      ],
+    },
+    {
+      heading: "Building a filename",
+      bullets: [
+        "Click Filename… below filename_prefix. Build inserts variables at the caret; Reference explains date codes, relative folders, dimensions, counters, and node values.",
+        "Dates use the saving server's clock. Width and height describe the exported grid, including labels and the chosen Save size. The preview stays pending before dimensions are known.",
+        "Apply updates the raw pattern. Cancel, Escape, and clicking outside discard the draft. Previewing never creates folders or reserves a file counter.",
+        "Both Save buttons expand variables. Save Output adds the next numbered PNG suffix; Save Disk uses the expanded stem plus _grid.png in your browser's chosen location.",
+        "Node references use named scalar widgets. Recorded execution values take priority after a run; duplicate names, linked inputs, missing values, and settings swept across the grid need correction.",
       ],
     },
     {
@@ -123,9 +146,9 @@ const XY_HELP = {
       ],
       bullets: [
         "The full-size grid is built only when you click Save, so choosing a bigger size never slows your runs down.",
-        "Save Disk saves to your computer and Save Output goes to ComfyUI's output folder, both at the Save size. Copy and Open use the smaller on-screen preview.",
+        "Save Disk saves to your computer and Save Output goes to ComfyUI's output folder, both at the Save size. Copy uses the smaller on-screen grid preview. Open report shows the individual images.",
         "The grid sent out of the node's image dot (top right) always stays 4096, to keep anything wired after it fast.",
-        "Want the preview bigger on the canvas? Make the NODE wider and it grows with it (and smaller again when you narrow it). A very tall grid stops growing at a point, so the node stays a size you can still work with - use Open for a proper look at that one.",
+        "Want the preview bigger on the canvas? Make the NODE wider and it grows with it (and smaller again when you narrow it). A very tall grid stops growing so the node stays manageable; use Open report to inspect individual images.",
       ],
     },
   ],
@@ -224,12 +247,23 @@ export function injectCSS() {
 textarea.pix-xy-input{resize:vertical;min-height:92px;white-space:pre-wrap;overflow-wrap:break-word;}
 .pix-xy-preview{font-size:11.5px;color:#9a9a9a;background:rgba(0,0,0,.25);border-radius:5px;padding:6px 8px;margin-top:6px;word-break:break-word;}
 .pix-xy-preview b{color:#8fd19e;font-weight:600;}
-.pix-xy-check{max-height:140px;overflow:auto;border:1px solid rgba(255,255,255,.14);border-radius:5px;background:#1d1d1d;}
-.pix-xy-check .pix-xy-item{display:flex;align-items:center;gap:8px;padding:5px 9px;font-size:12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);}
-.pix-xy-check .pix-xy-item:last-child{border-bottom:none;}
-.pix-xy-check .pix-xy-item:hover{background:#262626;}
-.pix-xy-box{width:14px;height:14px;flex:0 0 auto;border-radius:3px;border:1.5px solid rgba(255,255,255,.25);display:grid;place-items:center;font-size:10px;color:#fff;}
-.pix-xy-box.ck{background:var(--pix-acc,#f66744);border-color:var(--pix-acc,#f66744);}
+.pix-xy-check{overflow:auto;overscroll-behavior:contain;border:1px solid rgba(255,255,255,.14);border-radius:5px;background:#1d1d1d;}
+.pix-xy-selected{max-height:180px;margin-top:6px;}
+.pix-xy-selected-row{display:flex;align-items:center;gap:8px;padding:5px 9px;font-size:12px;border-bottom:1px solid rgba(255,255,255,.05);}
+.pix-xy-selected-row span{flex:1;min-width:0;overflow-wrap:anywhere;}
+.pix-xy-value-button{font:inherit;color:#e0e0e0;background:#292929;border:1px solid rgba(255,255,255,.18);border-radius:5px;cursor:pointer;padding:5px 9px;min-height:26px;}
+.pix-xy-value-button:hover{border-color:var(--pix-acc,#f66744);}
+.pix-xy-value-button:focus-visible,.pix-xy-values-popup input:focus-visible{outline:2px solid var(--pix-acc,#f66744);outline-offset:2px;}
+.pix-xy-values-trigger{width:100%;text-align:left;font-size:12px;}
+.pix-xy-values-popup{display:flex;flex-direction:column;gap:.5em;overflow:hidden;max-height:min(440px,calc(100dvh - 16px));color:#e0e0e0;font-family:'Segoe UI',system-ui,sans-serif;}
+.pix-xy-values-popup .pix-xy-input{flex:none;margin:0;}
+.pix-xy-values-popup .pix-xy-check{flex:1;min-height:0;}
+.pix-xy-values-popup .pix-xy-item{display:flex;align-items:center;gap:.67em;padding:.5em .75em;min-height:2em;box-sizing:border-box;font-size:1em;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);}
+.pix-xy-values-popup .pix-xy-item:hover{background:#262626;}
+.pix-xy-values-popup .pix-xy-item span{min-width:0;overflow-wrap:anywhere;}
+.pix-xy-values-popup input[type=checkbox]{flex:none;width:1.2em;height:1.2em;accent-color:var(--pix-acc,#f66744);}
+.pix-xy-values-footer{display:flex;align-items:center;justify-content:space-between;gap:1em;flex:none;}
+.pix-xy-values-popup .pix-xy-value-button{padding:.42em .75em;min-height:2em;}
 .pix-xy-count{font-size:11px;color:#9a9a9a;margin-top:5px;}
 /* counter chip + options */
 .pix-xy-counter{text-align:center;font-size:13px;font-weight:600;color:#fff;background:var(--pix-acc,#f66744);border-radius:6px;padding:7px;}
@@ -250,7 +284,21 @@ textarea.pix-xy-input{resize:vertical;min-height:92px;white-space:pre-wrap;overf
 .pix-xy-resetbtn{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11.5px;color:#cfcfcf;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);border-radius:5px;padding:5px 11px;cursor:pointer;user-select:none;}
 .pix-xy-resetbtn:hover{border-color:var(--pix-acc,#f66744);color:#fff;}
 /* grid preview + buttons */
+.pix-xy-wrap{display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px;font-size:12px;}
+.pix-xy-wrap[hidden]{display:none;}
+.pix-xy-wrap label{display:flex;align-items:center;gap:7px;}
+.pix-xy-wrap input[type=checkbox]{accent-color:var(--pix-acc,#f66744);width:16px;height:16px;}
+.pix-xy-wrap input[type=number]{width:64px;min-width:0;}
+.pix-xy-wrap input:disabled{opacity:.45;}
+.pix-xy-wrap input:focus-visible{outline:2px solid var(--pix-acc,#f66744);outline-offset:2px;}
 .pix-xy-gridmount{display:flex;flex-direction:column;gap:8px;}
+.pix-xy-report{display:flex;flex-direction:column;gap:4px;min-width:0;padding:9px 10px;border:1px solid rgba(255,255,255,.14);border-radius:5px;background:#1d1b1a;}
+.pix-xy-report[hidden]{display:none;}
+.pix-xy-report strong{font-size:12px;color:#eee;}
+.pix-xy-report-url{font-size:11px;color:var(--pix-acc,#f66744);overflow-wrap:anywhere;user-select:text;}
+.pix-xy-report-status{font-size:11px;color:#b7b1ad;overflow-wrap:anywhere;}
+.pix-xy-report-error{color:#ffb3a6;}
+.pix-xy-report-url:focus-visible,.pix-xy-sb:focus-visible{outline:2px solid var(--pix-acc,#f66744);outline-offset:3px;}
 .pix-xy-gridbox{border:1px solid rgba(255,255,255,.12);border-radius:6px;background:#161616;min-height:60px;display:flex;align-items:center;justify-content:center;overflow:hidden;}
 /* max-height is set from JS (grid.mjs) so the preview SCALES with the node
    instead of freezing at a constant - a square or tall grid used to hit a flat
@@ -289,9 +337,11 @@ export function buildRoot() {
   const root = document.createElement("div");
   root.className = "pix-xy-root";
   root.innerHTML = `
+    <div class="pix-xy-filename"></div>
     <div class="pix-xy-axis" data-axis="x"></div>
     <div class="pix-xy-axis" data-axis="y"></div>
     <div class="pix-xy-counter-wrap"></div>
+    <div class="pix-xy-wrap" hidden></div>
     <div class="pix-xy-opts"></div>
     <div class="pix-xy-opts2"></div>
     <div class="pix-xy-opts3"></div>
@@ -336,12 +386,14 @@ function labeledField(label, value, oninput) {
 
 let _openPopup = null;
 function closePopup() {
+  closeFilenameBuilder();
   if (_openPopup) { try { _openPopup._cleanup(); } catch (_e) {} _openPopup.remove(); _openPopup = null; }
 }
 
 // Close the picker popup ONLY if it belongs to `node` - so deleting node A
 // doesn't tear down node B's open picker (the popup is a module singleton).
 export function closePopupIfOwner(node) {
+  closeFilenameBuilder(node);
   if (_openPopup && node && _openPopup._pixOwnerId === node.id) closePopup();
 }
 
@@ -553,7 +605,184 @@ export function detachLineGutters(el) {
   });
 }
 
-function renderValueArea(node, axisKey, mount, refreshCounter, rerender) {
+function renderComboValues(node, axisKey, mount, axis, options, save, refreshCounter, growth) {
+  const checkedSet = new Set(axis.raw.checked || []);
+  const trigger = isolate(el("button", "pix-xy-value-button pix-xy-values-trigger"));
+  trigger.type = "button";
+  trigger.setAttribute("aria-haspopup", "dialog");
+  trigger.setAttribute("aria-expanded", "false");
+  const summary = el("div", "pix-xy-check pix-xy-selected");
+  summary.setAttribute("role", "region");
+  summary.setAttribute("aria-label", `${axisKey.toUpperCase()} selected values`);
+  summary.tabIndex = 0;
+  const count = el("div", "pix-xy-count");
+  count.setAttribute("aria-live", "polite");
+  const caption = el("div", "pix-xy-listcapt", "Choose the values to try. Each selection is one square.");
+  mount.append(caption, trigger, summary, count);
+
+  const updateSummary = () => {
+    const text = `${checkedSet.size} selected`;
+    trigger.textContent = `Choose values… · ${text}`;
+    count.textContent = text;
+    summary.replaceChildren();
+    if (!checkedSet.size) summary.appendChild(el("div", "pix-xy-empty", "No values selected."));
+    for (const value of checkedSet) {
+      const row = el("div", "pix-xy-selected-row");
+      row.appendChild(el("span", null, value));
+      const remove = isolate(el("button", "pix-xy-value-button", "×"));
+      remove.type = "button";
+      remove.setAttribute("aria-label", `Remove ${value}`);
+      remove.addEventListener("click", () => {
+        const index = [...summary.querySelectorAll("button")].indexOf(remove);
+        checkedSet.delete(value);
+        commit();
+        const buttons = summary.querySelectorAll("button");
+        (buttons[Math.min(index, buttons.length - 1)] || trigger).focus({ preventScroll: true });
+      });
+      row.appendChild(remove);
+      summary.appendChild(row);
+    }
+  };
+  const commit = () => {
+    axis.raw.checked = options.filter((value) => checkedSet.has(value));
+    checkedSet.clear();
+    axis.raw.checked.forEach((value) => checkedSet.add(value));
+    save();
+    updateSummary();
+    refreshCounter();
+    growth?.();
+  };
+  updateSummary();
+
+  trigger.addEventListener("click", () => {
+    if (_openPopup?._pixAnchor === trigger) { closePopup(); return; }
+    closePopup();
+    const popup = el("div", "pix-xy-popup pix-xy-values-popup");
+    popup.setAttribute("role", "dialog");
+    popup.setAttribute("aria-label", `${axisKey.toUpperCase()} axis values`);
+    popup.style.setProperty("--pix-acc", getComputedStyle(mount).getPropertyValue("--pix-acc") || BRAND);
+    const filter = isolate(el("input", "pix-xy-input"));
+    filter.type = "search";
+    filter.placeholder = "Filter values…";
+    filter.setAttribute("aria-label", "Filter values");
+    const selectAllRow = el("label", "pix-xy-item");
+    selectAllRow.style.flex = "none";
+    const selectAll = el("input");
+    selectAll.type = "checkbox";
+    selectAllRow.append(selectAll, el("span", null, "Select all listed"));
+    const list = el("div", "pix-xy-check");
+    const footer = el("div", "pix-xy-values-footer");
+    const popupCount = el("span", null, count.textContent);
+    popupCount.setAttribute("aria-live", "polite");
+    const done = el("button", "pix-xy-value-button", "Done");
+    done.type = "button";
+    done.addEventListener("click", () => closePopup());
+    footer.append(popupCount, done);
+    popup.append(filter, selectAllRow, list, footer);
+
+    let listed = [];
+    const updateSelectAll = () => {
+      const selected = listed.reduce((count, item) => count + Number(checkedSet.has(item.value)), 0);
+      selectAll.disabled = listed.length === 0;
+      selectAll.checked = listed.length > 0 && selected === listed.length;
+      selectAll.indeterminate = selected > 0 && selected < listed.length;
+    };
+    selectAll.addEventListener("change", () => {
+      for (const { value, checkbox } of listed) {
+        if (selectAll.checked) checkedSet.add(value); else checkedSet.delete(value);
+        checkbox.checked = selectAll.checked;
+      }
+      commit();
+      popupCount.textContent = count.textContent;
+      updateSelectAll();
+    });
+    const buildList = () => {
+      list.replaceChildren();
+      list.scrollTop = 0;
+      listed = [];
+      const query = filter.value.toLowerCase();
+      for (const value of options) {
+        if (query && !value.toLowerCase().includes(query)) continue;
+        const row = el("label", "pix-xy-item");
+        const checkbox = el("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = checkedSet.has(value);
+        checkbox.addEventListener("change", () => {
+          if (checkbox.checked) checkedSet.add(value); else checkedSet.delete(value);
+          commit();
+          popupCount.textContent = count.textContent;
+          updateSelectAll();
+        });
+        listed.push({ value, checkbox });
+        row.append(checkbox, el("span", null, value));
+        list.appendChild(row);
+      }
+      if (!list.children.length) {
+        list.appendChild(el("div", "pix-xy-empty", options.length ? "No matches." : "This dropdown has no options to list."));
+      }
+      updateSelectAll();
+    };
+    filter.addEventListener("input", buildList);
+    buildList();
+    document.body.appendChild(popup);
+    placeZoomedPopup(popup, trigger, { baseMaxHeightPx: 440, baseMaxWidthPx: 640, minWidthPx: 280 });
+    // The shared helper flips above the anchor but cannot fit a tall popup near
+    // the middle of a short viewport. Clamp both height and position here.
+    popup.style.maxHeight = Math.min(parseFloat(getComputedStyle(popup).maxHeight), window.innerHeight - 16) + "px";
+    popup.style.top = Math.max(8, Math.min(parseFloat(popup.style.top), window.innerHeight - popup.offsetHeight - 8)) + "px";
+    trigger.setAttribute("aria-expanded", "true");
+
+    const onDown = (event) => {
+      if (!popup.contains(event.target) && !trigger.contains(event.target)) closePopup();
+    };
+    const onWheel = (event) => { if (!popup.contains(event.target)) closePopup(); };
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        closePopup();
+      }
+    };
+    // Consume wheel input even at either boundary so it cannot zoom the graph
+    // or scroll the page. Wheel over the search/footer scrolls this list too.
+    popup.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? list.clientHeight : 1;
+      list.scrollTop += event.deltaY * unit;
+    }, { passive: false });
+    popup.addEventListener("keydown", (event) => {
+      event.stopPropagation();
+      if (event.key !== "Tab") return;
+      const controls = [...popup.querySelectorAll("input,button")];
+      const index = controls.indexOf(document.activeElement);
+      if (event.shiftKey && index === 0) {
+        event.preventDefault(); done.focus();
+      } else if (!event.shiftKey && index === controls.length - 1) {
+        event.preventDefault(); filter.focus();
+      }
+    }, true);
+    const dismiss = () => closePopup();
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("wheel", onWheel, true);
+    document.addEventListener("keydown", onKey, true);
+    window.addEventListener("resize", dismiss);
+    popup._cleanup = () => {
+      document.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener("wheel", onWheel, true);
+      document.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("resize", dismiss);
+      trigger.setAttribute("aria-expanded", "false");
+      if (trigger.isConnected) trigger.focus({ preventScroll: true });
+    };
+    popup._pixOwnerId = node.id;
+    popup._pixAnchor = trigger;
+    _openPopup = popup;
+    filter.focus({ preventScroll: true });
+  });
+}
+
+function renderValueArea(node, axisKey, mount, refreshCounter, rerender, growth) {
   detachLineGutters(mount);
   mount.innerHTML = "";
   const state = readState(node);
@@ -653,54 +882,7 @@ function renderValueArea(node, axisKey, mount, refreshCounter, rerender) {
     // plot - hasPlot went false and Run quietly produced one ordinary image.
     setLiveAxisMeta(axis, "liveOptions", options);
     if (!isGraphLoading()) axis.options = options;
-    const checkedSet = new Set(axis.raw.checked || []);
-    const countEl = el("div", "pix-xy-count");
-    const updateCount = () => { countEl.textContent = `${checkedSet.size} selected`; };
-
-    // What the checklist is FOR. Without it the list reads as "which of these do you
-    // want loaded", because it shows every sampler / checkpoint / LoRA on the machine
-    // and offers multi-select - so ticking two LoRAs looks like asking for both at
-    // once rather than for one square each. Reported from the wild ("maybe select 2
-    // Loras is stupid"), and it applies to every dropdown axis, not just LoRAs.
-    const capt = el("div", "pix-xy-listcapt", "Tick the ones to try. Each tick is one square.");
-    capt.title = "This is the list of VALUES for this axis. Every tick adds one square to the grid; it does not stack them together.";
-    mount.appendChild(capt);
-
-    // Filter box - sampler / scheduler / checkpoint lists can be long.
-    const filter = isolate(el("input", "pix-xy-input"));
-    filter.type = "text";
-    filter.placeholder = "Filter…";
-    filter.style.marginBottom = "6px";
-    const list = el("div", "pix-xy-check");
-
-    const buildList = (q) => {
-      list.innerHTML = "";
-      const ql = (q || "").toLowerCase();
-      const shown = options.filter((o) => !ql || o.toLowerCase().includes(ql));
-      if (!shown.length) {
-        list.appendChild(el("div", "pix-xy-empty", options.length ? "No matches." : "This dropdown has no options to list."));
-      }
-      for (const opt of shown) {
-        const item = el("div", "pix-xy-item");
-        const box = el("div", "pix-xy-box");
-        if (checkedSet.has(opt)) { box.classList.add("ck"); box.textContent = "✓"; }
-        item.appendChild(box);
-        item.appendChild(el("span", null, opt));
-        item.addEventListener("click", () => {
-          if (checkedSet.has(opt)) { checkedSet.delete(opt); box.classList.remove("ck"); box.textContent = ""; }
-          else { checkedSet.add(opt); box.classList.add("ck"); box.textContent = "✓"; }
-          axis.raw.checked = options.filter((o) => checkedSet.has(o)); // preserve displayed order
-          save(); updateCount(); refreshCounter();
-        });
-        list.appendChild(item);
-      }
-    };
-    filter.addEventListener("input", () => buildList(filter.value));
-    if (options.length > 6) mount.appendChild(filter);
-    mount.appendChild(list);
-    buildList("");
-    updateCount();
-    mount.appendChild(countEl);
+    renderComboValues(node, axisKey, mount, axis, options, save, refreshCounter, growth);
 
   } else if (axis.widgetType === "text") {
     const seg = el("div", "pix-xy-seg");
@@ -756,6 +938,47 @@ function buildToggle(label, on, onToggle) {
     onToggle(nowOn);
   });
   return t;
+}
+
+function buildWrapControl(node, mount, onChange, growth) {
+  mount.replaceChildren();
+  const checkLabel = el("label");
+  const checkbox = isolate(el("input", "pix-xy-wrap-enabled"));
+  checkbox.type = "checkbox";
+  checkLabel.append(checkbox, document.createTextNode("Wrap grid"));
+  const columnsLabel = el("label");
+  const columns = isolate(el("input", "pix-xy-input pix-xy-wrap-columns"));
+  columns.type = "number";
+  columns.min = "1";
+  columns.max = "100";
+  columns.step = "1";
+  columnsLabel.append(document.createTextNode("Columns"), columns);
+  mount.title = "For one axis only: fill left to right, then wrap into more rows. Applies to the next run.";
+  mount.append(checkLabel, columnsLabel);
+  checkbox.addEventListener("change", () => {
+    const state = readState(node);
+    state.wrapGrid = checkbox.checked;
+    writeState(node, state);
+    onChange();
+  });
+  columns.addEventListener("change", () => {
+    const state = readState(node);
+    state.wrapColumns = normalizeWrapColumns(columns.value === "" ? undefined : columns.value);
+    columns.value = String(state.wrapColumns);
+    writeState(node, state);
+    onChange();
+  });
+  let mounted = false;
+  return (layout) => {
+    const wasHidden = mount.hidden;
+    mount.hidden = !layout.singleAxis;
+    const state = readState(node);
+    checkbox.checked = state.wrapGrid === true;
+    columns.disabled = !checkbox.checked;
+    if (document.activeElement !== columns) columns.value = String(normalizeWrapColumns(state.wrapColumns));
+    if (mounted && wasHidden !== mount.hidden) growth?.();
+    mounted = true;
+  };
 }
 
 const THEMES = [["dark", "Dark"], ["light", "Light"], ["mono", "Mono"]];
@@ -886,18 +1109,24 @@ export function refreshAxisNotes(node, root) {
   }
 }
 
-// handlers: { rerender(): full rebuild, growth(): re-measure node height }
+// valueGrowth allows user edits to grow a restored node without resizing it on load.
 export function renderBody(node, root, handlers) {
+  closePopupIfOwner(node);
   const state = readState(node);
+  renderFilenameControl(node, root.querySelector(".pix-xy-filename"), { beforeOpen: closePopup });
+  const updateWrap = buildWrapControl(node, root.querySelector(".pix-xy-wrap"),
+    () => { refreshCounter(); (handlers.growth || handlers.valueGrowth)?.(); }, handlers.growth || handlers.valueGrowth);
 
   const refreshCounter = () => {
     const wrap = root.querySelector(".pix-xy-counter-wrap");
     if (!wrap) return;
-    const { cols, rows, total, hasPlot } = computeCounts(readState(node));
+    const layout = computeCounts(readState(node));
+    const { displayCols, displayRows, total, hasPlot } = layout;
+    updateWrap(layout);
     wrap.innerHTML = "";
     const chip = el("div", "pix-xy-counter" + (hasPlot ? "" : " muted"));
     chip.textContent = hasPlot
-      ? `→ ${total} image${total === 1 ? "" : "s"}  (${cols || 1} × ${rows || 1})`
+      ? `→ ${total} image${total === 1 ? "" : "s"}  (${displayCols || 1} × ${displayRows || 1}${layout.wrap ? ", wrapped" : ""})`
       : "Pick X and/or Y values to plot";
     wrap.appendChild(chip);
   };
@@ -947,7 +1176,7 @@ export function renderBody(node, root, handlers) {
     fillAxisNote(node, noteSlot, state[axisKey], state[axisKey === "x" ? "y" : "x"]);
     const valueArea = el("div", "pix-xy-valuearea");
     card.appendChild(valueArea);
-    renderValueArea(node, axisKey, valueArea, refreshCounter, handlers.rerender);
+    renderValueArea(node, axisKey, valueArea, refreshCounter, handlers.rerender, handlers.growth || handlers.valueGrowth);
   }
 
   refreshCounter();

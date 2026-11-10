@@ -1,4 +1,4 @@
-import{r as c,j as t,B as d}from"./pixaroma-ui.js";import{c as ge,S as je,I as R,X as ve}from"./pixaroma-ui-input.js";import"/scripts/api.js";/**
+import{r as c,j as t,B as d,I as R}from"./pixaroma-ui.js";import{c as ge,S as je,X as ve}from"./pixaroma-ui-x.js";import"/scripts/api.js";/**
  * @license lucide-react v0.468.0 - ISC
  *
  * This source code is licensed under the ISC license.

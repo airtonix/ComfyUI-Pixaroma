@@ -1,3 +1,3 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["./pixaroma-ui-HelpBrowser.js","./pixaroma-ui.js","./pixaroma-ui-index.css","./pixaroma-ui-input.js"])))=>i.map(i=>d[i]);
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["./pixaroma-ui-HelpBrowser.js","./pixaroma-ui.js","./pixaroma-ui-index.css","./pixaroma-ui-x.js"])))=>i.map(i=>d[i]);
 import{j as r,r as o,_ as t}from"./pixaroma-ui.js";import"/scripts/api.js";const i=o.lazy(()=>t(()=>import("./pixaroma-ui-HelpBrowser.js"),__vite__mapDeps([0,1,2,3]),import.meta.url).then(e=>({default:e.HelpBrowser}))),p={id:"help",label:"Help",icon:"?",order:10,requires:["runtime-props"],loadingFallback:r.jsx("div",{className:"px-widget-loading",children:"Loading Help…"}),component:i};export{p as widget};
 //# sourceMappingURL=pixaroma-ui-index.js.map

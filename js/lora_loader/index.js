@@ -4,7 +4,7 @@
 //
 // Architecture mirrors Sizes / Resolution: state on node.properties.loraLoaderState,
 // injected into the hidden LoraLoaderState input by the graphToPrompt hook below
-// (Vue Compat #9). Info panel, gear panel, dropdown, and row menu live in siblings.
+// (Vue Compat #9). Panels and row events live in siblings; the LoRA picker reuses shared navigation.
 
 import { app } from "/scripts/app.js";
 import { hideJsonWidget, applyAdaptiveCanvasOnly, installCanvasZoomPassthrough, onNodeDefsRefresh, installRefreshHook } from "../shared/index.mjs";
@@ -21,7 +21,7 @@ import { injectCSS, renderNode, contentHeight } from "./render.mjs";
 import { attachInteractions } from "./interaction.mjs";
 import { openLoraPanel, closeLoraPanelFor } from "./settings.mjs";
 import { closeInfoPanelFor } from "./info_panel.mjs";
-import { closeLoraDropdown } from "./dropdown.mjs";
+import { closeModelPicker } from "../shared/model_picker.mjs";
 import { closeRowMenu } from "./interaction.mjs";
 import { isQueueLoopActive } from "../shared/queue_drivers.mjs";
 // Side-effect import: registers the XY Plot sweep provider so this node's rows show
@@ -183,7 +183,7 @@ app.registerExtension({
     nodeType.prototype.onRemoved = function () {
       closeLoraPanelFor(this);
       closeInfoPanelFor(this);
-      closeLoraDropdown(); // transient - also auto-closes on the canvas click that deletes
+      closeModelPicker(); // transient - also auto-closes on the canvas click that deletes
       closeRowMenu();
       return _origRemoved?.apply(this, arguments);
     };
@@ -288,7 +288,7 @@ registerNodeHelp(CLASS, {
     {
       heading: "Each row",
       bullets: [
-        "The name box opens a searchable list of your LoRAs (grouped by subfolder).",
+        "The name box opens a searchable LoRA picker with a thumbnail beside each filename, grouped by subfolder.",
         "The strength box: type a number, or use the small up/down arrows.",
         "The i button opens the info panel.",
         "The switch on the right turns that LoRA on or off; an off row dims.",
@@ -334,7 +334,7 @@ registerNodeHelp(CLASS, {
         "models folder, so it survives an update and works even when your models sit on a read-only " +
         "or network drive. It follows the LoRA, so every row and every workflow using that LoRA shows it.\n\n" +
         "If you would rather see no pictures at all, for instance while recording, switch off Show " +
-        "preview thumbnails in the gear. The picture box then disappears from the panel entirely, and " +
+        "preview thumbnails in the gear. Pictures then disappear from both the picker and the info panel, and " +
         "any pictures you have set are kept safe for when you switch it back on.",
     },
     {

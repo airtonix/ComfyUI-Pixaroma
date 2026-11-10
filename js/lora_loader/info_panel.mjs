@@ -930,7 +930,7 @@ export async function openInfoPanel(node, id, refresh) {
   renderBody();
   place(panel, node);
 
-  const onDown = (e) => { if (!panel.contains(e.target) && !e.target.closest?.(".pix-ll-dd")) closeInfoPanel(); };
+  const onDown = (e) => { if (!panel.contains(e.target) && !e.target.closest?.(".pix-model-picker")) closeInfoPanel(); };
   const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); closeInfoPanel(); } };
   // Ctrl+V sets the LoRA's picture from the clipboard. On CAPTURE and stopping
   // propagation, because ComfyUI pastes an image onto the CANVAS as a node - with

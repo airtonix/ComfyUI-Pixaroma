@@ -7,7 +7,7 @@ import {
   readState, patchLora, addLora, removeLora, duplicateLora, moveLora,
   setAllOn, countOn, accentOf, MAX_LORAS,
 } from "./core.mjs";
-import { openLoraDropdown } from "./dropdown.mjs";
+import { openLoraPicker } from "./picker.mjs";
 import { openInfoPanel, autoTickAfterPick } from "./info_panel.mjs";
 import { openLoraPanel } from "./settings.mjs";
 
@@ -202,9 +202,10 @@ export function attachInteractions(node, widgetEl, refresh) {
 
 function openNamePicker(node, id, anchorEl, refresh) {
   const e = readState(node).loras.find((x) => x.id === id);
-  openLoraDropdown(anchorEl, {
+  openLoraPicker(anchorEl, {
     current: e?.name || "",
     accent: accentOf(node),
+    thumbs: readState(node).thumbs !== false,
     onPick: (name) => {
       patchLora(node, id, { name });
       refresh(false);

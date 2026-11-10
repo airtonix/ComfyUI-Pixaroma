@@ -353,7 +353,7 @@ export function openLoraPanel(node, refresh) {
   body.appendChild(toggleRow("Civitai lookup button",
     "Show the optional online lookup in the info panel", "civitai"));
   body.appendChild(toggleRow("Show preview thumbnails",
-    "In the info panel", "thumbs"));
+    "In the LoRA picker and info panel", "thumbs"));
 
   // ── Civitai account ────────────────────────────────────────────────────────
   //

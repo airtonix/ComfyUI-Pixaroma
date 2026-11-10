@@ -15,7 +15,7 @@ function runtimeStubs() {
     },
     load(id: string) {
       if (!id.startsWith("\0pixaroma-runtime:")) return undefined;
-      return "export const app = globalThis.__pixaromaTestApp ?? {}; export const api = globalThis.__pixaromaTestApi ?? {};";
+      return "export const app = globalThis.__pixaromaTestApp ?? globalThis.app ?? {}; export const api = globalThis.__pixaromaTestApi ?? globalThis.comfyAPI?.api?.api ?? {};";
     },
   };
 }
@@ -36,7 +36,7 @@ function helpDocuments() {
 }
 
 export default defineConfig(({ command, mode }) => ({
-  plugins: [react(), helpDocuments(), ...(mode === "test" ? [runtimeStubs()] : [])],
+  plugins: [react(), helpDocuments(), ...(command === "serve" || mode === "test" ? [runtimeStubs()] : [])],
   base: command === "build" ? "./" : "/",
   resolve: {
     alias: {
@@ -49,6 +49,7 @@ export default defineConfig(({ command, mode }) => ({
     proxy: {
       "/api": "http://127.0.0.1:8188",
       "/extensions": "http://127.0.0.1:8188",
+      "/pixaroma": "http://127.0.0.1:8188",
       "/scripts": "http://127.0.0.1:8188",
     },
   },

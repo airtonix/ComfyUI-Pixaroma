@@ -76,6 +76,13 @@ Stack as many LoRAs as you want in one compact node, each on its own line with a
 
 Click a LoRA name to open its thumbnail picker. Each file row shows a preview beside the filename; files without an image show **No preview**. Search includes folder paths. The picker uses your saved preview or the image beside the LoRA file, without an online lookup. Turn off **Show preview thumbnails** in the gear to hide images in both the picker and the info panel.
 
+### Diffusion Model Loader Pixaroma
+Load a diffusion model with the same folder-aware picker as LoRA Loader Pixaroma. Click the model name to browse folders, use **Back** or the breadcrumbs to move up, or search filenames and folder paths across the whole library. The list refreshes each time you open it.
+
+The node uses ComfyUI's registered `diffusion_models` folders, including `models/unet` and locations in `extra_model_paths.yaml`. Connect its **MODEL** output to a sampler or LoRA loader. Load the text encoder (**CLIP**) and **VAE** separately. `weight_dtype` has the same options as ComfyUI's **Load Diffusion Model**; leave it at `default` unless your model requires another setting. In Nodes 2.0, enable advanced inputs to show this setting. GGUF files require a separate GGUF loader.
+
+The selected filename and dtype use native ComfyUI inputs and survive workflow save/reload. After installing this node, restart ComfyUI and reload the browser.
+
 ### 🔗 Text Join Pixaroma
 Join a few pieces of text into one, each on its own line - and every line is **type-or-wire**: type straight in, or drag a wire from another node to feed it, so fixed text and text from elsewhere mix freely. Comes in **Two**, **Three** and **Four** line versions, and the lines **grow** as you enlarge the node so long text has room. Right-click for the settings: choose what goes **between** the pieces (comma, space, new line, none, or your own), **skip empty** lines so you never get a stray comma, and - the handy part - **rename each line** to whatever fits your workflow (trigger words, prompt, camera, lighting) so the node reads the way you think. A per-line copy and paste sits on each box, and it works in both the classic and the new node interface.
 

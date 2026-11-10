@@ -17,13 +17,17 @@ from .nodes.node_uncrop import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_UNCROP
 from .nodes.node_inpaint_crop import NODE_CLASS_MAPPINGS as _MAPS_INPAINT_CROP
 from .nodes.node_inpaint_crop import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_INPAINT_CROP
 from .nodes.node_inpaint_stitch import NODE_CLASS_MAPPINGS as _MAPS_INPAINT_STITCH
-from .nodes.node_inpaint_stitch import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_INPAINT_STITCH
+from .nodes.node_inpaint_stitch import (
+    NODE_DISPLAY_NAME_MAPPINGS as _NAMES_INPAINT_STITCH,
+)
 from .nodes.node_label import NODE_CLASS_MAPPINGS as _MAPS_LABEL
 from .nodes.node_label import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_LABEL
 from .nodes.node_load_image import NODE_CLASS_MAPPINGS as _MAPS_LOAD_IMAGE
 from .nodes.node_load_image import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_LOAD_IMAGE
 from .nodes.node_load_image_mini import NODE_CLASS_MAPPINGS as _MAPS_LOAD_IMAGE_MINI
-from .nodes.node_load_image_mini import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_LOAD_IMAGE_MINI
+from .nodes.node_load_image_mini import (
+    NODE_DISPLAY_NAME_MAPPINGS as _NAMES_LOAD_IMAGE_MINI,
+)
 from .nodes.node_image_info import NODE_CLASS_MAPPINGS as _MAPS_IMAGE_INFO
 from .nodes.node_image_info import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_IMAGE_INFO
 from .nodes.node_paint import NODE_CLASS_MAPPINGS as _MAPS_PAINT
@@ -50,8 +54,12 @@ from .nodes.node_mute_switch import NODE_CLASS_MAPPINGS as _MAPS_MUTE_SWITCH
 from .nodes.node_mute_switch import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_MUTE_SWITCH
 from .nodes.node_wh import NODE_CLASS_MAPPINGS as _MAPS_WH
 from .nodes.node_wh import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_WH
-from .nodes.node_portrait_landscape import NODE_CLASS_MAPPINGS as _MAPS_PORTRAIT_LANDSCAPE
-from .nodes.node_portrait_landscape import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_PORTRAIT_LANDSCAPE
+from .nodes.node_portrait_landscape import (
+    NODE_CLASS_MAPPINGS as _MAPS_PORTRAIT_LANDSCAPE,
+)
+from .nodes.node_portrait_landscape import (
+    NODE_DISPLAY_NAME_MAPPINGS as _NAMES_PORTRAIT_LANDSCAPE,
+)
 from .nodes.node_number import NODE_CLASS_MAPPINGS as _MAPS_NUMBER
 from .nodes.node_number import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_NUMBER
 from .nodes.node_sliders import NODE_CLASS_MAPPINGS as _MAPS_SLIDERS
@@ -67,7 +75,9 @@ from .nodes.node_prompt_stack import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_PROMPT
 from .nodes.node_prompt_multi import NODE_CLASS_MAPPINGS as _MAPS_PROMPT_MULTI
 from .nodes.node_prompt_multi import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_PROMPT_MULTI
 from .nodes.node_prompt_from_list import NODE_CLASS_MAPPINGS as _MAPS_PROMPT_FROM_LIST
-from .nodes.node_prompt_from_list import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_PROMPT_FROM_LIST
+from .nodes.node_prompt_from_list import (
+    NODE_DISPLAY_NAME_MAPPINGS as _NAMES_PROMPT_FROM_LIST,
+)
 from .nodes.node_prompt_pack import NODE_CLASS_MAPPINGS as _MAPS_PROMPT_PACK
 from .nodes.node_prompt_pack import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_PROMPT_PACK
 from .nodes.node_prompt_each import NODE_CLASS_MAPPINGS as _MAPS_PROMPT_EACH
@@ -85,9 +95,13 @@ from .nodes.node_longest_side import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_LONGES
 from .nodes.node_outpaint import NODE_CLASS_MAPPINGS as _MAPS_OUTPAINT
 from .nodes.node_outpaint import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_OUTPAINT
 from .nodes.node_outpaint_stitch import NODE_CLASS_MAPPINGS as _MAPS_OUTPAINT_STITCH
-from .nodes.node_outpaint_stitch import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_OUTPAINT_STITCH
+from .nodes.node_outpaint_stitch import (
+    NODE_DISPLAY_NAME_MAPPINGS as _NAMES_OUTPAINT_STITCH,
+)
 from .nodes.node_text_watermark import NODE_CLASS_MAPPINGS as _MAPS_TEXT_WATERMARK
-from .nodes.node_text_watermark import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_TEXT_WATERMARK
+from .nodes.node_text_watermark import (
+    NODE_DISPLAY_NAME_MAPPINGS as _NAMES_TEXT_WATERMARK,
+)
 from .nodes.node_version_check import NODE_CLASS_MAPPINGS as _MAPS_VERSION_CHECK
 from .nodes.node_version_check import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_VERSION_CHECK
 from .nodes.node_pause_image import NODE_CLASS_MAPPINGS as _MAPS_PAUSE_IMAGE
@@ -105,9 +119,13 @@ from .nodes.node_set_get import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_SET_GET
 from .nodes.node_load_video import NODE_CLASS_MAPPINGS as _MAPS_LOAD_VIDEO
 from .nodes.node_load_video import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_LOAD_VIDEO
 from .nodes.node_load_video_frame import NODE_CLASS_MAPPINGS as _MAPS_LOAD_VIDEO_FRAME
-from .nodes.node_load_video_frame import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_LOAD_VIDEO_FRAME
+from .nodes.node_load_video_frame import (
+    NODE_DISPLAY_NAME_MAPPINGS as _NAMES_LOAD_VIDEO_FRAME,
+)
 from .nodes.node_first_last_frame import NODE_CLASS_MAPPINGS as _MAPS_FIRST_LAST_FRAME
-from .nodes.node_first_last_frame import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_FIRST_LAST_FRAME
+from .nodes.node_first_last_frame import (
+    NODE_DISPLAY_NAME_MAPPINGS as _NAMES_FIRST_LAST_FRAME,
+)
 from .nodes.node_loop import NODE_CLASS_MAPPINGS as _MAPS_LOOP
 from .nodes.node_loop import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_LOOP
 from .nodes.node_combine import NODE_CLASS_MAPPINGS as _MAPS_COMBINE
@@ -129,9 +147,17 @@ from .nodes.node_save_video import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_SAVE_VID
 from .nodes.node_save_text import NODE_CLASS_MAPPINGS as _MAPS_SAVE_TEXT
 from .nodes.node_save_text import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_SAVE_TEXT
 from .nodes.node_krea_lora_convert import NODE_CLASS_MAPPINGS as _MAPS_KREA_LORA_CONVERT
-from .nodes.node_krea_lora_convert import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_KREA_LORA_CONVERT
+from .nodes.node_krea_lora_convert import (
+    NODE_DISPLAY_NAME_MAPPINGS as _NAMES_KREA_LORA_CONVERT,
+)
 from .nodes.node_lora_loader import NODE_CLASS_MAPPINGS as _MAPS_LORA_LOADER
 from .nodes.node_lora_loader import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_LORA_LOADER
+from .nodes.node_diffusion_model_loader import (
+    NODE_CLASS_MAPPINGS as _MAPS_DIFFUSION_MODEL_LOADER,
+)
+from .nodes.node_diffusion_model_loader import (
+    NODE_DISPLAY_NAME_MAPPINGS as _NAMES_DIFFUSION_MODEL_LOADER,
+)
 from .nodes.node_sizes import NODE_CLASS_MAPPINGS as _MAPS_SIZES
 from .nodes.node_sizes import NODE_DISPLAY_NAME_MAPPINGS as _NAMES_SIZES
 from .nodes.node_text_join import NODE_CLASS_MAPPINGS as _MAPS_TEXT_JOIN
@@ -229,6 +255,7 @@ NODE_CLASS_MAPPINGS = {
     **_MAPS_SAVE_TEXT,
     **_MAPS_KREA_LORA_CONVERT,
     **_MAPS_LORA_LOADER,
+    **_MAPS_DIFFUSION_MODEL_LOADER,
     **_MAPS_SIZES,
     **_MAPS_TEXT_JOIN,
     **_MAPS_DROPDOWN,
@@ -309,6 +336,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     **_NAMES_SAVE_TEXT,
     **_NAMES_KREA_LORA_CONVERT,
     **_NAMES_LORA_LOADER,
+    **_NAMES_DIFFUSION_MODEL_LOADER,
     **_NAMES_SIZES,
     **_NAMES_TEXT_JOIN,
     **_NAMES_DROPDOWN,

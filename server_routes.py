@@ -3078,6 +3078,18 @@ async def api_lora_list(request):
     return web.json_response({"loras": files}, headers=hdrs)
 
 
+@PromptServer.instance.routes.get("/pixaroma/api/diffusion-model/list")
+async def api_diffusion_model_list(request):
+    """List registered diffusion model filenames, preserving subfolder prefixes."""
+    hdrs = {"Cache-Control": "no-store"}
+    try:
+        files = list(folder_paths.get_filename_list("diffusion_models"))
+    except Exception:
+        # A failed scan must not look like an empty model folder to the picker.
+        return web.json_response({"models": [], "error": True}, headers=hdrs)
+    return web.json_response({"models": files}, headers=hdrs)
+
+
 @PromptServer.instance.routes.get("/pixaroma/api/lora/info")
 async def api_lora_info(request):
     """Offline info + trigger words for one LoRA (the info panel). Always 200 so the

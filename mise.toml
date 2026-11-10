@@ -1,0 +1,7 @@
+[tools]
+node = "22"
+oxlint = "latest"
+oxfmt = "latest"
+
+[env]
+_.path = ["{{ config_root }}/node_modules/.bin", "{{ config_root }}/ui/node_modules/.bin"]

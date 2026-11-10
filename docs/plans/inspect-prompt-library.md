@@ -239,13 +239,13 @@ The adapter should:
 
 Suggested route mapping:
 
-| Adapter method | Endpoint |
-|---|---|
-| `load()` | `GET /pixaroma/api/prompt/library/markdown` |
-| `refresh()` | `POST /pixaroma/api/prompt/library/markdown/refresh` |
-| `createOrUpdate()` | `POST /pixaroma/api/prompt/library/markdown` |
-| `delete(id)` | `DELETE /pixaroma/api/prompt/library/markdown/{id}` |
-| `sync()` | `PUT /pixaroma/api/prompt/library/markdown` |
+| Adapter method     | Endpoint                                             |
+| ------------------ | ---------------------------------------------------- |
+| `load()`           | `GET /pixaroma/api/prompt/library/markdown`          |
+| `refresh()`        | `POST /pixaroma/api/prompt/library/markdown/refresh` |
+| `createOrUpdate()` | `POST /pixaroma/api/prompt/library/markdown`         |
+| `delete(id)`       | `DELETE /pixaroma/api/prompt/library/markdown/{id}`  |
+| `sync()`           | `PUT /pixaroma/api/prompt/library/markdown`          |
 
 The adapter must not use the compatibility cache in `library.mjs`. Instead, after a successful mutation it should notify the legacy facade through an explicit bridge:
 
@@ -408,6 +408,7 @@ Keep import/export isolated from the main form:
 - `PromptExportMenu`
 
 The current import implementation supports Markdown and JSON but has a separate, looser parser from Python. The migration should either:
+
 1. preserve this behavior and test it, or
 2. centralize the client-side Markdown parser against the server’s strict format.
 
@@ -658,7 +659,7 @@ The main architectural rule should be: **React owns editor state and presentatio
 
 # Markdown-backed prompt records
 
-The prompt library must support loading the existing Markdown tree before the React editor replaces the imperative editor. The current user library is a symlink to a shared tag tree containing 416 Markdown records. Every record has YAML-style frontmatter with `name` and `tags`, followed by a non-empty body. Records are nested under categories such as `styles/camera`, `subject/hairstyles`, `room/featureless`, `nationality`, and `nsfw`.
+The prompt library must support loading the existing Markdown tree before the React editor replaces the imperative editor. The library will be a collection of markdown, every record having YAML-style frontmatter with `name` and `tags`, followed by a non-empty body. Records are nested under categories such as `styles/camera`, `subject/hairstyles`, `scene/studio`, `scene/mountain`, `subject/nationality`, `subject/expression` and many others.
 
 The Markdown format is the source of truth for this migration. Do not reduce records to the legacy JSON shape before the React feature receives them.
 
@@ -668,13 +669,13 @@ Add a typed record that preserves storage identity and display metadata:
 
 ```ts
 export type PromptRecord = {
-  id: string;              // normalized relative path without .md
-  sourcePath: string;      // e.g. styles/camera/close-up.md
-  name: string;            // frontmatter display name
+  id: string; // normalized relative path without .md
+  sourcePath: string; // e.g. styles/camera/close-up.md
+  name: string; // frontmatter display name
   tags: string[];
   body: string;
-  category: string;        // first path component
-  folders: string[];       // path components including category
+  category: string; // first path component
+  folders: string[]; // path components including category
   filename: string;
   kind: "text" | "list";
   prefix?: "@" | "#" | "$" | "&";
@@ -739,7 +740,7 @@ The requested `$` and `&` prefixes require an explicit compatibility decision. B
 
 Build fixtures from the existing tree, including:
 
-- `nationality/american.md`;
+- `subject/nationality/american.md`;
 - `styles/camera/close-up.md`;
 - a record whose frontmatter name differs from its filename;
 - a multiline body;

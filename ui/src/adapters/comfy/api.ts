@@ -38,6 +38,7 @@ export async function fetchJson<T>(route: string, init?: RequestInit): Promise<T
       payload = text;
     }
   }
-  if (!response.ok) throw new ComfyApiError(errorMessage(payload, response.status), response.status, route);
+  if (!response.ok)
+    throw new ComfyApiError(errorMessage(payload, response.status), response.status, route);
   return payload as T;
 }

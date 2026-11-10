@@ -15,11 +15,21 @@ function invalidPath(field: string, value: string): Error {
 }
 
 function pathParts(field: string, value: string, extension: string): string[] {
-  if (!value || value.startsWith("/") || /^[A-Za-z]:[\\/]/.test(value) || value.startsWith("\\\\") || value.includes("\\")) {
+  if (
+    !value ||
+    value.startsWith("/") ||
+    /^[A-Za-z]:[\\/]/.test(value) ||
+    value.startsWith("\\\\") ||
+    value.includes("\\")
+  ) {
     throw invalidPath(field, value);
   }
   const parts = value.split("/");
-  if (parts.some((part) => !part || part === "." || part === "..") || value.endsWith("/") || !value.endsWith(extension)) {
+  if (
+    parts.some((part) => !part || part === "." || part === "..") ||
+    value.endsWith("/") ||
+    !value.endsWith(extension)
+  ) {
     throw invalidPath(field, value);
   }
   return parts;
@@ -36,10 +46,21 @@ function normalizedPath(sourcePath: string): { id: string; folders: string[]; fi
 
 function unquote(value: string): string {
   const trimmed = value.trim();
-  if (trimmed.length >= 2 && ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'")))) {
+  if (
+    trimmed.length >= 2 &&
+    ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'")))
+  ) {
     return trimmed.slice(1, -1).replace(trimmed[0] === '"' ? /\\([\\"nrt])/g : /''/g, (match) => {
       if (match === "''") return "'";
-      return ({ "\\n": "\n", "\\r": "\r", "\\t": "\t", '\\"': '"', "\\\\": "\\" } as Record<string, string>)[match] ?? match;
+      return (
+        (
+          { "\\n": "\n", "\\r": "\r", "\\t": "\t", '\\"': '"', "\\\\": "\\" } as Record<
+            string,
+            string
+          >
+        )[match] ?? match
+      );
     });
   }
   return trimmed;
@@ -56,9 +77,13 @@ function parseValue(value: string): unknown {
   return unquote(trimmed);
 }
 
-function parseFrontmatter(sourcePath: string, source: string): { frontmatter: Frontmatter; body: string } {
+function parseFrontmatter(
+  sourcePath: string,
+  source: string,
+): { frontmatter: Frontmatter; body: string } {
   const normalized = source.replace(/\r\n?/g, "\n");
-  if (!normalized.startsWith("---\n")) throw new Error(`${sourcePath}: missing frontmatter delimiters`);
+  if (!normalized.startsWith("---\n"))
+    throw new Error(`${sourcePath}: missing frontmatter delimiters`);
   const closingDelimiter = /\n---(?:\n|$)/.exec(normalized.slice(4));
   if (!closingDelimiter) throw new Error(`${sourcePath}: unterminated frontmatter`);
   const end = closingDelimiter.index + 4;
@@ -121,7 +146,10 @@ export function parsePromptMarkdown(sourcePath: string, source: string): PromptR
   if (frontmatter.kind !== "text" && frontmatter.kind !== "list") {
     throw new Error(`${sourcePath}: kind must be text or list`);
   }
-  if (frontmatter.prefix !== undefined && !["@", "#", "$", "&"].includes(String(frontmatter.prefix))) {
+  if (
+    frontmatter.prefix !== undefined &&
+    !["@", "#", "$", "&"].includes(String(frontmatter.prefix))
+  ) {
     throw new Error(`${sourcePath}: prefix must be @, #, $, or &`);
   }
 
@@ -136,7 +164,8 @@ export function parsePromptMarkdown(sourcePath: string, source: string): PromptR
     filename: path.filename,
     kind: frontmatter.kind,
   };
-  if (frontmatter.prefix !== undefined) record.prefix = frontmatter.prefix as PromptRecord["prefix"];
+  if (frontmatter.prefix !== undefined)
+    record.prefix = frontmatter.prefix as PromptRecord["prefix"];
   const unknownFrontmatter = frontmatterFields(frontmatter);
   if (unknownFrontmatter) record.unknownFrontmatter = unknownFrontmatter;
   return record;
@@ -161,7 +190,12 @@ export function renderPromptMarkdown(record: PromptRecord): string {
     ...(record.prefix ? [{ key: "prefix", value: record.prefix }] : []),
     ...(record.unknownFrontmatter ?? []),
   ];
-  const frontmatter = fields.map(({ key, value }) => `${key}:${Array.isArray(value) ? renderValue(value) : ` ${renderValue(value)}`}`).join("\n");
+  const frontmatter = fields
+    .map(
+      ({ key, value }) =>
+        `${key}:${Array.isArray(value) ? renderValue(value) : ` ${renderValue(value)}`}`,
+    )
+    .join("\n");
   return `---\n${frontmatter}\n---\n${record.body.replace(/\r\n?/g, "\n")}`;
 }
 
@@ -171,18 +205,30 @@ export function normalizePromptRecord(value: unknown): PromptRecord {
   const sourcePath = record.sourcePath;
   if (typeof sourcePath !== "string") throw new Error("sourcePath must be a string");
   const path = normalizedPath(sourcePath);
-  if (typeof record.id !== "string" || record.id !== path.id) throw new Error(`${sourcePath}: id must match sourcePath`);
-  if (typeof record.name !== "string" || !record.name.trim()) throw new Error(`${sourcePath}: name must be a non-empty string`);
-  if (record.body !== undefined && typeof record.body !== "string") throw new Error(`${sourcePath}: body must be a string`);
-  if (record.kind !== "text" && record.kind !== "list") throw new Error(`${sourcePath}: kind must be text or list`);
+  if (typeof record.id !== "string" || record.id !== path.id)
+    throw new Error(`${sourcePath}: id must match sourcePath`);
+  if (typeof record.name !== "string" || !record.name.trim())
+    throw new Error(`${sourcePath}: name must be a non-empty string`);
+  if (record.body !== undefined && typeof record.body !== "string")
+    throw new Error(`${sourcePath}: body must be a string`);
+  if (record.kind !== "text" && record.kind !== "list")
+    throw new Error(`${sourcePath}: kind must be text or list`);
   if (record.prefix !== undefined && !["@", "#", "$", "&"].includes(String(record.prefix))) {
     throw new Error(`${sourcePath}: prefix must be @, #, $, or &`);
   }
   const tags = normalizedTags(sourcePath, record.tags);
   if (record.unknownFrontmatter !== undefined) {
-    if (!Array.isArray(record.unknownFrontmatter) || record.unknownFrontmatter.some((field) => {
-      return !field || typeof field !== "object" || typeof (field as Record<string, unknown>).key !== "string";
-    })) throw new Error(`${sourcePath}: unknownFrontmatter is invalid`);
+    if (
+      !Array.isArray(record.unknownFrontmatter) ||
+      record.unknownFrontmatter.some((field) => {
+        return (
+          !field ||
+          typeof field !== "object" ||
+          typeof (field as Record<string, unknown>).key !== "string"
+        );
+      })
+    )
+      throw new Error(`${sourcePath}: unknownFrontmatter is invalid`);
   }
   return {
     id: path.id,
@@ -195,7 +241,9 @@ export function normalizePromptRecord(value: unknown): PromptRecord {
     filename: path.filename,
     kind: record.kind,
     ...(record.prefix === undefined ? {} : { prefix: record.prefix as PromptRecord["prefix"] }),
-    ...(record.unknownFrontmatter === undefined ? {} : { unknownFrontmatter: record.unknownFrontmatter as PromptFrontmatterField[] }),
+    ...(record.unknownFrontmatter === undefined
+      ? {}
+      : { unknownFrontmatter: record.unknownFrontmatter as PromptFrontmatterField[] }),
   };
 }
 
@@ -206,7 +254,10 @@ export function parsePromptLibrary(files: MarkdownFile[]): PromptLibraryLoadResu
     try {
       parsed.push(parsePromptMarkdown(file.sourcePath, file.source));
     } catch (error) {
-      errors.push({ sourcePath: file.sourcePath, message: error instanceof Error ? error.message : String(error) });
+      errors.push({
+        sourcePath: file.sourcePath,
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
   }
   const byId = new Map<string, PromptRecord>();
@@ -216,11 +267,25 @@ export function parsePromptLibrary(files: MarkdownFile[]): PromptLibraryLoadResu
     const previous = byId.get(key);
     if (previous) {
       duplicates.add(key);
-      errors.push({ sourcePath: previous.sourcePath, message: `duplicate id "${key}" conflicts with ${record.sourcePath}` });
-      errors.push({ sourcePath: record.sourcePath, message: `duplicate id "${key}" conflicts with ${previous.sourcePath}` });
+      errors.push({
+        sourcePath: previous.sourcePath,
+        message: `duplicate id "${key}" conflicts with ${record.sourcePath}`,
+      });
+      errors.push({
+        sourcePath: record.sourcePath,
+        message: `duplicate id "${key}" conflicts with ${previous.sourcePath}`,
+      });
     } else if (!duplicates.has(key)) {
       byId.set(key, record);
     }
   }
-  return { library: { version: 1, prompts: [...byId.values()].filter((record) => !duplicates.has(record.id.toLocaleLowerCase())) }, errors };
+  return {
+    library: {
+      version: 1,
+      prompts: [...byId.values()].filter(
+        (record) => !duplicates.has(record.id.toLocaleLowerCase()),
+      ),
+    },
+    errors,
+  };
 }

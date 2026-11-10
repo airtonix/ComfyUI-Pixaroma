@@ -1,6 +1,8 @@
 import { lazy } from "react";
 
-const PromptLibrary = lazy(() => import("./PromptLibrary").then((module) => ({ default: module.PromptLibrary })));
+const PromptLibrary = lazy(() =>
+  import("./PromptLibrary").then((module) => ({ default: module.PromptLibrary })),
+);
 
 export const widget = {
   id: "prompt-library",

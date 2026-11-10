@@ -16,7 +16,7 @@ const comfyApp = app as ComfyApp;
 
 export function getSetting<T>(name: string, fallback: T): T {
   const value = comfyApp.ui?.settings?.getSettingValue?.(name);
-  return value === undefined ? fallback : value as T;
+  return value === undefined ? fallback : (value as T);
 }
 
 export async function openWorkflow(path: string): Promise<void> {

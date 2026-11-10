@@ -31,14 +31,19 @@ type RawDocument = { path: string; source: string };
 
 function scalar(value: string) {
   const text = value.trim();
-  if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("'") && text.endsWith("'"))) return text.slice(1, -1);
+  if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'")))
+    return text.slice(1, -1);
   return text;
 }
 
 function list(value: string): string[] {
   const text = value.trim();
   if (!text.startsWith("[") || !text.endsWith("]")) return text ? text.split(/\s+/) : [];
-  return text.slice(1, -1).split(",").map((item) => scalar(item)).filter(Boolean);
+  return text
+    .slice(1, -1)
+    .split(",")
+    .map((item) => scalar(item))
+    .filter(Boolean);
 }
 
 function parseFrontmatter(source: string) {
@@ -62,27 +67,56 @@ function footerText(body: string) {
 }
 
 function parseBody(body: string) {
-  const blocks = body.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
+  const blocks = body
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
   const sections: HelpSection[] = [];
   let current: HelpSection = {};
-  const flush = () => { if (Object.keys(current).length) sections.push(current); current = {}; };
+  const flush = () => {
+    if (Object.keys(current).length) sections.push(current);
+    current = {};
+  };
   for (const block of blocks) {
     if (block.startsWith("> **Tip:**")) continue;
-    if (block.startsWith("> ")) { current.paragraphs = [...(current.paragraphs || []), block.slice(2).trim()]; continue; }
-    if (block.startsWith("## ")) { flush(); current.heading = block.slice(3).trim(); continue; }
+    if (block.startsWith("> ")) {
+      current.paragraphs = [...(current.paragraphs || []), block.slice(2).trim()];
+      continue;
+    }
+    if (block.startsWith("## ")) {
+      flush();
+      current.heading = block.slice(3).trim();
+      continue;
+    }
     const lines = block.split("\n");
-    if (lines.every((line) => line.startsWith("- "))) { current.bullets = [...(current.bullets || []), ...lines.map((line) => line.slice(2))]; continue; }
+    if (lines.every((line) => line.startsWith("- "))) {
+      current.bullets = [...(current.bullets || []), ...lines.map((line) => line.slice(2))];
+      continue;
+    }
     if (lines.every((line) => /^\*\*.+\*\* — /.test(line))) {
-      current.definitions = [...(current.definitions || []), ...lines.map((line) => { const match = /^\*\*(.+)\*\* — (.*)$/.exec(line)!; return { term: match[1], description: match[2] }; })];
+      current.definitions = [
+        ...(current.definitions || []),
+        ...lines.map((line) => {
+          const match = /^\*\*(.+)\*\* — (.*)$/.exec(line)!;
+          return { term: match[1], description: match[2] };
+        }),
+      ];
       continue;
     }
     if (lines.length >= 2 && lines[0].startsWith("| ") && lines[1].includes("---")) {
-      const cells = (line: string) => line.split("|").slice(1, -1).map((cell) => cell.trim());
+      const cells = (line: string) =>
+        line
+          .split("|")
+          .slice(1, -1)
+          .map((cell) => cell.trim());
       current.table = { headers: cells(lines[0]), rows: lines.slice(2).map(cells) };
       continue;
     }
     const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(block);
-    if (link) { current.links = [...(current.links || []), { label: link[1], url: link[2] }]; continue; }
+    if (link) {
+      current.links = [...(current.links || []), { label: link[1], url: link[2] }];
+      continue;
+    }
     current.paragraphs = [...(current.paragraphs || []), block];
   }
   flush();
@@ -93,19 +127,36 @@ export function parseHelpDocument(document: RawDocument): HelpEntry {
   const { meta, body } = parseFrontmatter(document.source);
   const required = ["id", "title", "kind", "category", "order"].filter((key) => !meta[key]);
   if (required.length) throw new Error(`${document.path}: missing ${required.join(", ")}`);
-  if (!["guide", "node", "canvas"].includes(String(meta.kind))) throw new Error(`${document.path}: invalid kind`);
-  const paragraphs = body.split(/\n{2,}/).filter((block) => block.startsWith("> ") && !block.startsWith("> **Tip:**"));
+  if (!["guide", "node", "canvas"].includes(String(meta.kind)))
+    throw new Error(`${document.path}: invalid kind`);
+  const paragraphs = body
+    .split(/\n{2,}/)
+    .filter((block) => block.startsWith("> ") && !block.startsWith("> **Tip:**"));
   return {
-    id: String(meta.id), kind: meta.kind as HelpKind, title: String(meta.title), tagline: paragraphs[0]?.slice(2) || "",
-    category: String(meta.category), order: Number(meta.order), icon: String(meta.icon || ""), comfyClass: meta.comfyClass ? String(meta.comfyClass) : undefined,
-    tags: Array.isArray(meta.tags) ? meta.tags : [], related: Array.isArray(meta.related) ? meta.related : [], sections: parseBody(body), footer: footerText(body),
+    id: String(meta.id),
+    kind: meta.kind as HelpKind,
+    title: String(meta.title),
+    tagline: paragraphs[0]?.slice(2) || "",
+    category: String(meta.category),
+    order: Number(meta.order),
+    icon: String(meta.icon || ""),
+    comfyClass: meta.comfyClass ? String(meta.comfyClass) : undefined,
+    tags: Array.isArray(meta.tags) ? meta.tags : [],
+    related: Array.isArray(meta.related) ? meta.related : [],
+    sections: parseBody(body),
+    footer: footerText(body),
   };
 }
 
 export function loadHelpDocuments(documents: RawDocument[] = helpDocuments) {
-  const entries = documents.map(parseHelpDocument).sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
+  const entries = documents
+    .map(parseHelpDocument)
+    .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
   const ids = new Set<string>();
-  for (const entry of entries) { if (ids.has(entry.id)) throw new Error(`duplicate help id: ${entry.id}`); ids.add(entry.id); }
+  for (const entry of entries) {
+    if (ids.has(entry.id)) throw new Error(`duplicate help id: ${entry.id}`);
+    ids.add(entry.id);
+  }
   return entries;
 }
 

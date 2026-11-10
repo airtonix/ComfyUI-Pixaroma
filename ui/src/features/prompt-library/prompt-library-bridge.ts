@@ -8,7 +8,9 @@ type PromptLibraryUpdatedDetail = {
 
 export function notifyPromptLibrary(library: PromptLibrary): void {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent<PromptLibraryUpdatedDetail>(PROMPT_LIBRARY_UPDATED_EVENT, {
-    detail: { library },
-  }));
+  window.dispatchEvent(
+    new CustomEvent<PromptLibraryUpdatedDetail>(PROMPT_LIBRARY_UPDATED_EVENT, {
+      detail: { library },
+    }),
+  );
 }

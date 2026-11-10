@@ -10,7 +10,14 @@ export function mergeRuntimeHelp(entries: HelpEntry[], runtime: HelpEntry[]) {
   const merged = entries.map((entry) => {
     const extra = byId.get(entry.id);
     if (!extra) return entry;
-    return { ...entry, comfyClass: extra.comfyClass || entry.comfyClass, controls: extra.controls, sections: entry.sections.length ? entry.sections : extra.sections, tagline: entry.tagline || extra.tagline, footer: entry.footer || extra.footer };
+    return {
+      ...entry,
+      comfyClass: extra.comfyClass || entry.comfyClass,
+      controls: extra.controls,
+      sections: entry.sections.length ? entry.sections : extra.sections,
+      tagline: entry.tagline || extra.tagline,
+      footer: entry.footer || extra.footer,
+    };
   });
   const known = new Set(entries.map((entry) => entry.id));
   return [...merged, ...runtime.filter((entry) => !known.has(entry.id))];

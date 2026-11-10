@@ -111,9 +111,7 @@ os.environ["U2NET_HOME"] = REMBG_MODELS_DIR
 PIXAROMA_ASSETS_DIR = os.path.realpath(
     os.path.join(os.path.dirname(__file__), "assets")
 )
-PIXAROMA_VENDOR_DIR = os.path.realpath(
-    os.path.join(PIXAROMA_ASSETS_DIR, "vendor")
-)
+PIXAROMA_VENDOR_DIR = os.path.realpath(os.path.join(PIXAROMA_ASSETS_DIR, "vendor"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Browser-cache fix for our .mjs files - TWO layers, both needed.
@@ -142,7 +140,9 @@ _PIX_PREFIX = "/extensions/" + _PIX_DIR + "/"
 _PIX_JS_ROOT = os.path.realpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "js")
 )
-_PIX_PYPROJECT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pyproject.toml")
+_PIX_PYPROJECT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "pyproject.toml"
+)
 _pix_stamp_version_cache = {"mtime": None, "version": "0"}
 
 
@@ -177,9 +177,11 @@ async def _pixaroma_stamp_imports_mw(request, handler):
         and (p.endswith(".mjs") or p.endswith(".js"))
     ):
         try:
-            rel = p[len(_PIX_PREFIX):]
+            rel = p[len(_PIX_PREFIX) :]
             file_path = os.path.realpath(os.path.join(_PIX_JS_ROOT, rel))
-            if file_path.startswith(_PIX_JS_ROOT + os.sep) and os.path.isfile(file_path):
+            if file_path.startswith(_PIX_JS_ROOT + os.sep) and os.path.isfile(
+                file_path
+            ):
                 with open(file_path, "r", encoding="utf-8") as f:
                     text = f.read()
                 text = stamp_import_urls(text, _pixaroma_stamp_version())
@@ -331,7 +333,11 @@ async def serve_pixaroma_asset_sub2(request):
     subdir = request.match_info["subdir"]
     subdir2 = request.match_info["subdir2"]
     filename = request.match_info["filename"]
-    for part in (subdir, subdir2, filename.replace(".", "").replace("-", "").replace("_", "")):
+    for part in (
+        subdir,
+        subdir2,
+        filename.replace(".", "").replace("-", "").replace("_", ""),
+    ):
         if not _SAFE_ID_RE.match(part):
             return web.Response(status=400)
     file_path = os.path.realpath(
@@ -415,7 +421,9 @@ _PROMPT_LIBRARY_LOCK = threading.RLock()
 
 
 def _prompt_library_paths(request):
-    user_root = PromptServer.instance.user_manager.get_request_user_filepath(request, None)
+    user_root = PromptServer.instance.user_manager.get_request_user_filepath(
+        request, None
+    )
     if not user_root:
         return None, None
     root = os.path.join(user_root, _PROMPT_LIBRARY_DIRNAME)
@@ -479,7 +487,9 @@ def _prompt_read_files(root, manifest_path):
             with open(path, "r", encoding="utf-8") as f:
                 rows = json.load(f)
             if isinstance(rows, list):
-                tags.extend(dict(tag, cat=category) for tag in rows if isinstance(tag, dict))
+                tags.extend(
+                    dict(tag, cat=category) for tag in rows if isinstance(tag, dict)
+                )
     uncategorized = os.path.join(root, "uncategorized.json")
     if os.path.isfile(uncategorized):
         with open(uncategorized, "r", encoding="utf-8") as f:
@@ -568,7 +578,9 @@ async def prompt_library_post(request):
             _prompt_write_files(root, library)
         return web.json_response({"ok": True})
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
-        return web.json_response({"error": "could not write prompt library"}, status=400)
+        return web.json_response(
+            {"error": "could not write prompt library"}, status=400
+        )
 
 
 def _markdown_library(root):
@@ -580,11 +592,20 @@ def _markdown_library(root):
 
 def _markdown_prompt(root, prompt_id):
     filename = _prompt_filename(prompt_id)
-    return next((prompt for prompt in _list_prompt_files(root) if prompt["sourcePath"] == filename), None)
+    return next(
+        (
+            prompt
+            for prompt in _list_prompt_files(root)
+            if prompt["sourcePath"] == filename
+        ),
+        None,
+    )
 
 
 def _markdown_migrate(request, root):
-    if os.path.isdir(root) and any(name.endswith(".md") for _, _, names in os.walk(root) for name in names):
+    if os.path.isdir(root) and any(
+        name.endswith(".md") for _, _, names in os.walk(root) for name in names
+    ):
         return
     legacy = _prompt_read_legacy(request)
     if isinstance(legacy, dict):
@@ -614,7 +635,9 @@ async def prompt_markdown_library_refresh(request):
     return await prompt_markdown_library_get(request)
 
 
-@PromptServer.instance.routes.get("/pixaroma/api/prompt/library/markdown/{prompt_id:.*}")
+@PromptServer.instance.routes.get(
+    "/pixaroma/api/prompt/library/markdown/{prompt_id:.*}"
+)
 async def prompt_markdown_prompt_get(request):
     try:
         with _PROMPT_LIBRARY_LOCK:
@@ -650,16 +673,26 @@ async def prompt_markdown_prompt_post(request):
             records = _list_prompt_files(root)
             if previous_id is not None:
                 records = [record for record in records if record["id"] != previous_id]
-            records = [record for record in records if record["id"] != prompt_id] + [prompt]
+            records = [record for record in records if record["id"] != prompt_id] + [
+                prompt
+            ]
             _sync_prompt_files(root, records)
             saved = _markdown_prompt(root, prompt_id)
             library = _markdown_library(root)
         return web.json_response({"prompt": saved, "library": library})
-    except (_PromptRecordError, OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+    except (
+        _PromptRecordError,
+        OSError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as error:
         return web.json_response({"error": str(error)}, status=400)
 
 
-@PromptServer.instance.routes.delete("/pixaroma/api/prompt/library/markdown/{prompt_id:.*}")
+@PromptServer.instance.routes.delete(
+    "/pixaroma/api/prompt/library/markdown/{prompt_id:.*}"
+)
 async def prompt_markdown_prompt_delete(request):
     try:
         with _PROMPT_LIBRARY_LOCK:
@@ -696,7 +729,8 @@ async def pixaroma_sounds(request):
         # so a name with a space (e.g. "My Chime.mp3") would 400 on playback.
         # Filtering here keeps the picker from offering an unplayable file.
         files = sorted(
-            f for f in os.listdir(sounds_dir)
+            f
+            for f in os.listdir(sounds_dir)
             if f.lower().endswith((".mp3", ".wav", ".ogg"))
             and _SAFE_ID_RE.match(f.replace(".", "").replace("-", "").replace("_", ""))
         )
@@ -716,7 +750,9 @@ async def krea_lora_inspect(request):
     try:
         return web.json_response(_krea_lora_inspect(name))
     except Exception as exc:
-        return web.json_response({"ok": False, "message": "Inspect failed: {}".format(exc)})
+        return web.json_response(
+            {"ok": False, "message": "Inspect failed: {}".format(exc)}
+        )
 
 
 @PromptServer.instance.routes.post("/pixaroma/api/krea_lora/convert")
@@ -734,7 +770,9 @@ async def krea_lora_convert(request):
     try:
         return web.json_response(_krea_lora_convert(name, out, overwrite))
     except Exception as exc:
-        return web.json_response({"ok": False, "message": "Convert failed: {}".format(exc)})
+        return web.json_response(
+            {"ok": False, "message": "Convert failed: {}".format(exc)}
+        )
 
 
 @PromptServer.instance.routes.get("/pixaroma/api/note/icons/list")
@@ -758,21 +796,23 @@ async def list_note_icons(request):
             # never hand the frontend an id it would later strip.
             if not re.match(r"^[A-Za-z0-9_-]{1,64}$", stem):
                 continue
-            entries.append({
-                "id": stem,
-                "label": _derive_icon_label(stem),
-                # The /pixaroma/api/ form: a hosted ComfyUI's gateway forwards
-                # that prefix and blocks /pixaroma/assets/ at the edge. This
-                # value is handed straight to the browser, so it must be the
-                # reachable one. The frontend still runs it through pixApiUrl()
-                # to pick up any auth token the host requires.
-                # The TAIL only. The frontend hands this to pixAsset(), which
-                # builds the extensionless /pixaroma/api/asset?path=... url a
-                # hosted ComfyUI's gateway will actually forward, and adds any
-                # auth token that host requires. Do NOT put a full path here:
-                # a url ending .svg is intercepted by their static file server.
-                "url": f"icons/note/{name}",
-            })
+            entries.append(
+                {
+                    "id": stem,
+                    "label": _derive_icon_label(stem),
+                    # The /pixaroma/api/ form: a hosted ComfyUI's gateway forwards
+                    # that prefix and blocks /pixaroma/assets/ at the edge. This
+                    # value is handed straight to the browser, so it must be the
+                    # reachable one. The frontend still runs it through pixApiUrl()
+                    # to pick up any auth token the host requires.
+                    # The TAIL only. The frontend hands this to pixAsset(), which
+                    # builds the extensionless /pixaroma/api/asset?path=... url a
+                    # hosted ComfyUI's gateway will actually forward, and adds any
+                    # auth token that host requires. Do NOT put a full path here:
+                    # a url ending .svg is intercepted by their static file server.
+                    "url": f"icons/note/{name}",
+                }
+            )
         entries.sort(key=lambda e: e["label"].lower())
         return web.json_response({"icons": entries})
     except Exception:
@@ -918,6 +958,7 @@ def _embed_workflow_metadata(workflow, prompt) -> PngInfo:
 # any new json route; `or {}` alone is not enough.
 # Harness: D:\Claude Tests\_json_body_guard_test.py
 
+
 @PromptServer.instance.routes.post("/pixaroma/api/layer/upload")
 async def upload_raw_layer(request):
     data = await request.json()
@@ -1034,11 +1075,13 @@ async def save_3d_model_upload(request):
         re.IGNORECASE,
     ):
         return web.json_response(
-            {"status": "error", "msg": "bad_filename"}, status=400,
+            {"status": "error", "msg": "bad_filename"},
+            status=400,
         )
     if len(b64) > _MAX_B64_BYTES:
         return web.json_response(
-            {"status": "error", "msg": "too_large"}, status=413,
+            {"status": "error", "msg": "too_large"},
+            status=413,
         )
 
     # Strip optional data URL prefix (the frontend sends `readAsDataURL`).
@@ -1145,7 +1188,7 @@ def _crop_prune(prefix, project_id, keep=_CROP_KEEP_PER_PROJECT):
                 entries.append((os.path.getmtime(full), full))
             except OSError:
                 pass
-        entries.sort(reverse=True)          # newest first
+        entries.sort(reverse=True)  # newest first
         for _mtime, full in entries[keep:]:
             try:
                 os.remove(full)
@@ -1196,6 +1239,7 @@ async def upload_crop_source(request):
 # ────────────────────────────────────────────────────────────
 # Inpaint Crop Pixaroma — source + painted-mask upload
 # ────────────────────────────────────────────────────────────
+
 
 @PromptServer.instance.routes.post("/pixaroma/api/inpaint/upload_src")
 async def upload_inpaint_source(request):
@@ -1255,8 +1299,8 @@ async def save_inpaint_mask(request):
 ALLOWED_AUDIO_STUDIO_IMAGE_EXTS = {"png", "jpg", "jpeg", "webp"}
 ALLOWED_AUDIO_STUDIO_AUDIO_EXTS = {"wav"}  # WAV only — browser converts before upload
 _AUDIO_STUDIO_NODE_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
-_AUDIO_STUDIO_MAX_FILE_BYTES = 50 * 1024 * 1024   # 50 MB per file
-_AUDIO_STUDIO_MAX_DIR_BYTES  = 100 * 1024 * 1024  # 100 MB combined per node
+_AUDIO_STUDIO_MAX_FILE_BYTES = 50 * 1024 * 1024  # 50 MB per file
+_AUDIO_STUDIO_MAX_DIR_BYTES = 100 * 1024 * 1024  # 100 MB combined per node
 
 
 @PromptServer.instance.routes.get("/pixaroma/api/audio_studio/sysinfo")
@@ -1268,9 +1312,10 @@ async def audio_studio_sysinfo(request):
     info = {"total_gb": None, "available_gb": None, "cap_gb": None}
     try:
         import psutil
+
         vm = psutil.virtual_memory()
-        info["total_gb"] = vm.total / (1024 ** 3)
-        info["available_gb"] = vm.available / (1024 ** 3)
+        info["total_gb"] = vm.total / (1024**3)
+        info["available_gb"] = vm.available / (1024**3)
         info["cap_gb"] = info["available_gb"] * 0.90
     except Exception:
         pass
@@ -1305,7 +1350,8 @@ async def audio_studio_upload(request):
         )
     if kind not in ("image", "audio"):
         return web.json_response(
-            {"error": "kind must be 'image' or 'audio'."}, status=400,
+            {"error": "kind must be 'image' or 'audio'."},
+            status=400,
         )
     if not file_bytes or not file_filename:
         return web.json_response({"error": "file field is missing."}, status=400)
@@ -1318,18 +1364,22 @@ async def audio_studio_upload(request):
     ext = file_filename.rsplit(".", 1)[-1].lower() if "." in file_filename else ""
     if kind == "image" and ext not in ALLOWED_AUDIO_STUDIO_IMAGE_EXTS:
         return web.json_response(
-            {"error": (
-                f"image extension {ext!r} not allowed; use one of "
-                f"{sorted(ALLOWED_AUDIO_STUDIO_IMAGE_EXTS)}."
-            )},
+            {
+                "error": (
+                    f"image extension {ext!r} not allowed; use one of "
+                    f"{sorted(ALLOWED_AUDIO_STUDIO_IMAGE_EXTS)}."
+                )
+            },
             status=400,
         )
     if kind == "audio" and ext not in ALLOWED_AUDIO_STUDIO_AUDIO_EXTS:
         return web.json_response(
-            {"error": (
-                "audio extension " + repr(ext) + " not allowed; only WAV is "
-                "accepted (the browser converts other formats before upload)."
-            )},
+            {
+                "error": (
+                    "audio extension " + repr(ext) + " not allowed; only WAV is "
+                    "accepted (the browser converts other formats before upload)."
+                )
+            },
             status=400,
         )
 
@@ -1342,6 +1392,7 @@ async def audio_studio_upload(request):
 
     # Replace any existing files of the same kind (potentially different ext).
     import glob as _glob
+
     for existing in _glob.glob(os.path.join(target_dir, kind + ".*")):
         try:
             os.unlink(existing)
@@ -1367,10 +1418,12 @@ async def audio_studio_upload(request):
         other_size = 0
     if other_size + len(file_bytes) > _AUDIO_STUDIO_MAX_DIR_BYTES:
         return web.json_response(
-            {"error": (
-                f"per-node combined size cap "
-                f"({_AUDIO_STUDIO_MAX_DIR_BYTES} bytes) exceeded."
-            )},
+            {
+                "error": (
+                    f"per-node combined size cap "
+                    f"({_AUDIO_STUDIO_MAX_DIR_BYTES} bytes) exceeded."
+                )
+            },
             status=400,
         )
 
@@ -1383,8 +1436,19 @@ async def audio_studio_upload(request):
 
 # ── Load Video Pixaroma: video upload ────────────────────────────────────────
 _LOAD_VIDEO_UPLOAD_EXTS = {
-    "mp4", "mov", "mkv", "webm", "avi", "m4v", "gif",
-    "mpg", "mpeg", "wmv", "flv", "ogv", "ts",
+    "mp4",
+    "mov",
+    "mkv",
+    "webm",
+    "avi",
+    "m4v",
+    "gif",
+    "mpg",
+    "mpeg",
+    "wmv",
+    "flv",
+    "ogv",
+    "ts",
 }
 _LOAD_VIDEO_MAX_BYTES = 1024 * 1024 * 1024  # 1 GB
 # _WIN_RESERVED_NAMES is imported at the top of this file. It used to be defined
@@ -1419,7 +1483,8 @@ async def load_video_upload(request):
     ext = ext.lower().lstrip(".")
     if ext not in _LOAD_VIDEO_UPLOAD_EXTS:
         return web.json_response(
-            {"error": f"video extension {ext!r} not allowed."}, status=400,
+            {"error": f"video extension {ext!r} not allowed."},
+            status=400,
         )
     stem = re.sub(r"[^A-Za-z0-9_\- ]", "_", stem).strip().strip(".") or "video"
     # Reserved Windows device names (NUL/CON/COM1/...) resolve to a device, not a
@@ -1454,7 +1519,8 @@ async def load_video_upload(request):
             n += 1
             if n > 100000:
                 return web.json_response(
-                    {"error": "could not find a free filename."}, status=500,
+                    {"error": "could not find a free filename."},
+                    status=500,
                 )
 
     def _rm_target():
@@ -1483,7 +1549,8 @@ async def load_video_upload(request):
         _rm_target()
         print(f"[Pixaroma] Load Video — upload write failed: {e}")
         return web.json_response(
-            {"error": "could not save the uploaded file."}, status=500,
+            {"error": "could not save the uploaded file."},
+            status=500,
         )
 
     if too_big:
@@ -1493,12 +1560,14 @@ async def load_video_upload(request):
         _rm_target()
         return web.json_response({"error": "the uploaded file was empty."}, status=400)
 
-    return web.json_response({
-        "name": candidate,    # plain filename in input/ root, like native uploads
-        "subfolder": "",
-        "filename": candidate,
-        "type": "input",
-    })
+    return web.json_response(
+        {
+            "name": candidate,  # plain filename in input/ root, like native uploads
+            "subfolder": "",
+            "filename": candidate,
+            "type": "input",
+        }
+    )
 
 
 @PromptServer.instance.routes.get("/pixaroma/api/load_video_frame/meta")
@@ -1518,6 +1587,7 @@ async def load_video_frame_meta(request):
     try:
         from .nodes._video_helpers import probe_meta
         import asyncio
+
         loop = asyncio.get_running_loop()
         # Opening the container + reading headers is usually fast, but keep it off
         # the aiohttp event loop so a slow/huge file can't stall other requests.
@@ -1536,10 +1606,34 @@ async def load_video_frame_meta(request):
 #   minRembg — "0" means always; otherwise SemVer gate checked by info
 # `auto` is a virtual option; the server picks the best available.
 REMBG_MODELS = [
-    {"id": "auto",              "label": "Auto (recommended)", "hint": "Picks the best available model",   "sizeMB": 0,   "minRembg": "0"},
-    {"id": "u2net",             "label": "Fast",               "hint": "Works on any rembg install (u2net)", "sizeMB": 176, "minRembg": "0"},
-    {"id": "isnet-general-use", "label": "Balanced",           "hint": "Cleaner edges than u2net (isnet)",   "sizeMB": 170, "minRembg": "2.0.27"},
-    {"id": "birefnet-general",  "label": "Best",               "hint": "Highest quality, large (BiRefNet)",  "sizeMB": 900, "minRembg": "2.0.56"},
+    {
+        "id": "auto",
+        "label": "Auto (recommended)",
+        "hint": "Picks the best available model",
+        "sizeMB": 0,
+        "minRembg": "0",
+    },
+    {
+        "id": "u2net",
+        "label": "Fast",
+        "hint": "Works on any rembg install (u2net)",
+        "sizeMB": 176,
+        "minRembg": "0",
+    },
+    {
+        "id": "isnet-general-use",
+        "label": "Balanced",
+        "hint": "Cleaner edges than u2net (isnet)",
+        "sizeMB": 170,
+        "minRembg": "2.0.27",
+    },
+    {
+        "id": "birefnet-general",
+        "label": "Best",
+        "hint": "Highest quality, large (BiRefNet)",
+        "sizeMB": 900,
+        "minRembg": "2.0.56",
+    },
 ]
 
 # Fallback chain used by "auto" — tries best first.
@@ -1574,12 +1668,15 @@ async def remove_bg_info(request):
     }
     try:
         import rembg  # noqa: F401
+
         info["rembgInstalled"] = True
         info["rembgVersion"] = getattr(rembg, "__version__", "unknown")
     except ImportError:
         # Still return the model catalog so the UI can show greyed
         # entries with the "install rembg" hint.
-        info["models"] = [dict(m, available=False, downloaded=False) for m in REMBG_MODELS]
+        info["models"] = [
+            dict(m, available=False, downloaded=False) for m in REMBG_MODELS
+        ]
         info["birefnet"] = get_birefnet_inventory()
         return web.json_response(info)
 
@@ -1600,7 +1697,9 @@ async def remove_bg_info(request):
     for m in REMBG_MODELS:
         req = _version_tuple(m["minRembg"])
         available = installed_ver >= req
-        out_models.append(dict(m, available=available, downloaded=m["id"] in downloaded_ids))
+        out_models.append(
+            dict(m, available=available, downloaded=m["id"] in downloaded_ids)
+        )
     info["models"] = out_models
     info["birefnet"] = get_birefnet_inventory()
     return web.json_response(info)
@@ -1630,17 +1729,21 @@ async def remove_bg(request):
     if is_birefnet_model_id(model):
         try:
             input_image = _decode_bare_b64_image(b64_data)
-            print(f"[Pixaroma] AI Remove Background: BiRefNet {model!r} on {input_image.size[0]}x{input_image.size[1]}...")
+            print(
+                f"[Pixaroma] AI Remove Background: BiRefNet {model!r} on {input_image.size[0]}x{input_image.size[1]}..."
+            )
             output_image = run_birefnet_on_pil(input_image, model)
             buffered = io.BytesIO()
             output_image.save(buffered, format="PNG")
             output_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
             print(f"[Pixaroma] AI Remove Background: done ({model})")
-            return web.json_response({
-                "status": "success",
-                "image": f"data:image/png;base64,{output_b64}",
-                "modelUsed": model,
-            })
+            return web.json_response(
+                {
+                    "status": "success",
+                    "image": f"data:image/png;base64,{output_b64}",
+                    "modelUsed": model,
+                }
+            )
         except ValueError as e:
             # File-not-found, lite-variant rejection, missing folder, etc.
             # ValueError carries our user-friendly install message.
@@ -1669,7 +1772,11 @@ async def remove_bg(request):
     # so the client can surface the real model name to the user.
     def _open_session(requested):
         tried = []
-        order = list(_AUTO_ORDER) if requested == "auto" else [requested] + [n for n in _AUTO_ORDER if n != requested]
+        order = (
+            list(_AUTO_ORDER)
+            if requested == "auto"
+            else [requested] + [n for n in _AUTO_ORDER if n != requested]
+        )
         last_err = None
         for name in order:
             try:
@@ -1680,13 +1787,17 @@ async def remove_bg(request):
                 last_err = e
                 tried.append(name)
                 print(f"[Pixaroma] model '{name}' not available: {e}")
-        raise RuntimeError(f"No rembg model could be loaded (tried {tried}): {last_err}")
+        raise RuntimeError(
+            f"No rembg model could be loaded (tried {tried}): {last_err}"
+        )
 
     try:
         session, model_used = _open_session(model)
 
         input_image = _decode_bare_b64_image(b64_data)
-        print(f"[Pixaroma] AI Remove Background: processing {input_image.size[0]}x{input_image.size[1]} image with '{model_used}'...")
+        print(
+            f"[Pixaroma] AI Remove Background: processing {input_image.size[0]}x{input_image.size[1]} image with '{model_used}'..."
+        )
         output_image = remove(input_image, session=session)
 
         buffered = io.BytesIO()
@@ -1694,14 +1805,18 @@ async def remove_bg(request):
         output_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
         print(f"[Pixaroma] AI Remove Background: done ({model_used})")
 
-        return web.json_response({
-            "status": "success",
-            "image": f"data:image/png;base64,{output_b64}",
-            "modelUsed": model_used,
-        })
+        return web.json_response(
+            {
+                "status": "success",
+                "image": f"data:image/png;base64,{output_b64}",
+                "modelUsed": model_used,
+            }
+        )
     except Exception as e:
         print(f"[Pixaroma] AI Remove Background: failed - {e}")
-        return web.json_response({"error": f"Background removal failed: {e}"}, status=500)
+        return web.json_response(
+            {"error": f"Background removal failed: {e}"}, status=500
+        )
 
 
 @PromptServer.instance.routes.post("/pixaroma/api/preview/save")
@@ -1751,8 +1866,9 @@ async def api_preview_save(request):
         # chunk - when present - is our own output riding along; rebuilding the
         # PngInfo from scratch was silently dropping it (found in review). None
         # is a no-op in _build_pnginfo, so files without it are byte-identical.
-        pnginfo = _build_pnginfo(prompt=prompt, workflow=workflow,
-                                 parameters=pil.info.get("parameters"))
+        pnginfo = _build_pnginfo(
+            prompt=prompt, workflow=workflow, parameters=pil.info.get("parameters")
+        )
         pil.save(full_path, "PNG", pnginfo=pnginfo)
     except Exception as e:
         return web.json_response({"error": f"save failed: {e}"}, status=500)
@@ -1802,8 +1918,9 @@ async def api_preview_prepare(request):
     try:
         # Same pass-through as /preview/save above: keep our own `parameters`
         # chunk across the re-encode (None is a no-op).
-        pnginfo = _build_pnginfo(prompt=prompt, workflow=workflow,
-                                 parameters=pil.info.get("parameters"))
+        pnginfo = _build_pnginfo(
+            prompt=prompt, workflow=workflow, parameters=pil.info.get("parameters")
+        )
         buf = io.BytesIO()
         pil.save(buf, "PNG", pnginfo=pnginfo)
         body = buf.getvalue()
@@ -1865,17 +1982,29 @@ async def api_xy_plot_save(request):
     if valid_sid:
         try:
             from .nodes.node_xy_plot import render_session_full, resolve_save_cap
-            grid_pil = render_session_full(session_id, resolve_save_cap(data.get("save_max_size")))
+
+            grid_pil = render_session_full(
+                session_id, resolve_save_cap(data.get("save_max_size"))
+            )
         except Exception as e:
-            print(f"[Pixaroma] XY Plot: full-res re-assembly failed, using preview: {e}")
+            print(
+                f"[Pixaroma] XY Plot: full-res re-assembly failed, using preview: {e}"
+            )
             grid_pil = None
 
     if grid_pil is None:
         temp_dir = folder_paths.get_temp_directory()
         safe_name = os.path.basename(grid_filename)
         grid_path = os.path.join(temp_dir, safe_name)
-        if not safe_name or not os.path.isfile(grid_path) or not _is_path_under(grid_path, temp_dir):
-            return web.json_response({"error": "grid image not found - re-run the plot, then Save"}, status=400)
+        if (
+            not safe_name
+            or not os.path.isfile(grid_path)
+            or not _is_path_under(grid_path, temp_dir)
+        ):
+            return web.json_response(
+                {"error": "grid image not found - re-run the plot, then Save"},
+                status=400,
+            )
         try:
             grid_pil = Image.open(grid_path).convert("RGB")
         except Exception as e:
@@ -1899,32 +2028,41 @@ async def api_xy_plot_save(request):
     if save_cells and valid_sid:
         try:
             from .nodes.node_xy_plot import snapshot_session_cells
-            cells, _ = snapshot_session_cells(session_id)   # copied under the node's lock
+
+            cells, _ = snapshot_session_cells(
+                session_id
+            )  # copied under the node's lock
             if cells:
                 # Include the grid's counter in the folder name so saving the
                 # same plot twice doesn't overwrite the first save's cells.
                 cells_folder = os.path.join(full_folder, f"{name}_{counter:05}_cells")
                 # Defense-in-depth: never write the cells subfolder outside output/.
-                if _is_path_under(cells_folder, output_dir) or _is_path_under(os.path.dirname(cells_folder), output_dir):
+                if _is_path_under(cells_folder, output_dir) or _is_path_under(
+                    os.path.dirname(cells_folder), output_dir
+                ):
                     os.makedirs(cells_folder, exist_ok=True)
                     for (xi, yi), cell in cells:
                         cell_name = f"{name}_x{xi}_y{yi}.png"
                         try:
-                            cell.convert("RGB").save(os.path.join(cells_folder, cell_name), "PNG")
+                            cell.convert("RGB").save(
+                                os.path.join(cells_folder, cell_name), "PNG"
+                            )
                             saved_cells += 1
                         except Exception:
                             pass
         except Exception as e:
             print(f"[Pixaroma] XY Plot: save cells failed: {e}")
 
-    return web.json_response({
-        "status": "success",
-        "filename": fname,
-        "subfolder": subfolder,
-        "saved_cells": saved_cells,
-        "width": grid_pil.width,
-        "height": grid_pil.height,
-    })
+    return web.json_response(
+        {
+            "status": "success",
+            "filename": fname,
+            "subfolder": subfolder,
+            "saved_cells": saved_cells,
+            "width": grid_pil.width,
+            "height": grid_pil.height,
+        }
+    )
 
 
 @PromptServer.instance.routes.post("/pixaroma/api/xy_plot/render_full")
@@ -1949,20 +2087,31 @@ async def api_xy_plot_render_full(request):
     if not isinstance(data, dict):
         data = {}
     session_id = data.get("session_id")
-    if not isinstance(session_id, str) or not _SAFE_ID_RE.match(session_id) or len(session_id) > _MAX_ID_LEN:
+    if (
+        not isinstance(session_id, str)
+        or not _SAFE_ID_RE.match(session_id)
+        or len(session_id) > _MAX_ID_LEN
+    ):
         return web.json_response({"error": "invalid session id"}, status=400)
     workflow = data.get("workflow")
     prompt = data.get("prompt")
     try:
         from .nodes.node_xy_plot import render_session_full, resolve_save_cap
-        grid_pil = render_session_full(session_id, resolve_save_cap(data.get("save_max_size")))
+
+        grid_pil = render_session_full(
+            session_id, resolve_save_cap(data.get("save_max_size"))
+        )
     except Exception as e:
         return web.json_response({"error": f"render failed: {e}"}, status=500)
     if grid_pil is None:
-        return web.json_response({"error": "session expired - run the plot again"}, status=404)
+        return web.json_response(
+            {"error": "session expired - run the plot again"}, status=404
+        )
     try:
         buf = io.BytesIO()
-        grid_pil.save(buf, "PNG", pnginfo=_build_pnginfo(prompt=prompt, workflow=workflow))
+        grid_pil.save(
+            buf, "PNG", pnginfo=_build_pnginfo(prompt=prompt, workflow=workflow)
+        )
     except Exception as e:
         return web.json_response({"error": f"encode failed: {e}"}, status=500)
     return web.Response(body=buf.getvalue(), content_type="image/png")
@@ -1985,17 +2134,24 @@ async def api_xy_plot_restyle(request):
         data = {}
     session_id = data.get("session_id")
     theme = data.get("theme") or "dark"
-    if not isinstance(session_id, str) or not _SAFE_ID_RE.match(session_id) or len(session_id) > _MAX_ID_LEN:
+    if (
+        not isinstance(session_id, str)
+        or not _SAFE_ID_RE.match(session_id)
+        or len(session_id) > _MAX_ID_LEN
+    ):
         return web.json_response({"error": "invalid session id"}, status=400)
     if theme not in ("dark", "light", "mono"):
         return web.json_response({"error": "invalid theme"}, status=400)
     try:
         from .nodes.node_xy_plot import restyle_session
+
         name = restyle_session(session_id, theme)
     except Exception as e:
         return web.json_response({"error": f"restyle failed: {e}"}, status=500)
     if not name:
-        return web.json_response({"error": "session expired - run the plot again"}, status=404)
+        return web.json_response(
+            {"error": "session expired - run the plot again"}, status=404
+        )
     return web.json_response({"status": "success", "filename": name})
 
 
@@ -2025,10 +2181,12 @@ async def api_prompt_reader_extract(request):
     """
     filename = request.query.get("filename", "")
     if not filename:
-        return web.json_response({
-            "found": False,
-            "message": "No image selected.",
-        })
+        return web.json_response(
+            {
+                "found": False,
+                "message": "No image selected.",
+            }
+        )
     try:
         image_path = folder_paths.get_annotated_filepath(filename)
     except Exception:
@@ -2045,27 +2203,33 @@ async def api_prompt_reader_extract(request):
             except Exception:
                 image_path = None
     if not image_path or not os.path.isfile(image_path):
-        return web.json_response({
-            "found": False,
-            "message": "Image file not found in the input folder.",
-        })
+        return web.json_response(
+            {
+                "found": False,
+                "message": "Image file not found in the input folder.",
+            }
+        )
     allowed_roots = [
         folder_paths.get_input_directory(),
         folder_paths.get_output_directory(),
         folder_paths.get_temp_directory(),
     ]
     if not _is_path_under(image_path, *allowed_roots):
-        return web.json_response({
-            "found": False,
-            "message": "Image path is outside the allowed directories.",
-        })
+        return web.json_response(
+            {
+                "found": False,
+                "message": "Image path is outside the allowed directories.",
+            }
+        )
     try:
         result = read_prompt_from_image(image_path)
     except Exception as e:
-        return web.json_response({
-            "found": False,
-            "message": f"Could not read metadata: {e}",
-        })
+        return web.json_response(
+            {
+                "found": False,
+                "message": f"Could not read metadata: {e}",
+            }
+        )
     return web.json_response(result)
 
 
@@ -2097,7 +2261,9 @@ def _lif_list_files(real, recursive):
                 except OSError:
                     continue
                 rel = os.path.relpath(full, real).replace("\\", "/")
-                files.append({"file": rel, "name": n, "size": st.st_size, "mtime": st.st_mtime})
+                files.append(
+                    {"file": rel, "name": n, "size": st.st_size, "mtime": st.st_mtime}
+                )
     else:
         for n in os.listdir(real):
             full = os.path.join(real, n)
@@ -2106,7 +2272,9 @@ def _lif_list_files(real, recursive):
                     st = os.stat(full)
                 except OSError:
                     continue
-                files.append({"file": n, "name": n, "size": st.st_size, "mtime": st.st_mtime})
+                files.append(
+                    {"file": n, "name": n, "size": st.st_size, "mtime": st.st_mtime}
+                )
     return files
 
 
@@ -2126,7 +2294,12 @@ async def api_lif_list(request):
     # lexically before any filesystem call touches it.
     if not _pix_prescreen(folder):
         return web.json_response(
-            {"ok": False, "message": _pix_denied_message(folder), "denied": True, "files": []},
+            {
+                "ok": False,
+                "message": _pix_denied_message(folder),
+                "denied": True,
+                "files": [],
+            },
             headers=hdrs,
         )
     # Containment (2026-08-03, ComfyUI-Manager PR #3118). This route is
@@ -2138,18 +2311,29 @@ async def api_lif_list(request):
     # reason; these three routes contradicted it until the round-3 review.
     if not _pix_folder_allowed(folder):
         return web.json_response(
-            {"ok": False, "message": _pix_denied_message(folder), "denied": True, "files": []},
+            {
+                "ok": False,
+                "message": _pix_denied_message(folder),
+                "denied": True,
+                "files": [],
+            },
             headers=hdrs,
         )
     if not folder or not os.path.isdir(folder):
-        return web.json_response({"ok": False, "message": "Folder not found.", "files": []}, headers=hdrs)
+        return web.json_response(
+            {"ok": False, "message": "Folder not found.", "files": []}, headers=hdrs
+        )
     real = os.path.realpath(folder)
     try:
         import asyncio
+
         loop = asyncio.get_running_loop()
         files = await loop.run_in_executor(None, _lif_list_files, real, recursive)
     except Exception as e:
-        return web.json_response({"ok": False, "message": f"Could not read folder: {e}", "files": []}, headers=hdrs)
+        return web.json_response(
+            {"ok": False, "message": f"Could not read folder: {e}", "files": []},
+            headers=hdrs,
+        )
     return web.json_response({"ok": True, "folder": real, "files": files}, headers=hdrs)
 
 
@@ -2166,6 +2350,7 @@ def _lif_make_thumb(full):
     .convert("I") is required before .point().
     """
     from PIL import ImageOps
+
     im = Image.open(full)
     im = ImageOps.exif_transpose(im)
     if im.mode == "I":
@@ -2184,7 +2369,7 @@ async def api_lif_thumb(request):
     """Serve a small JPEG thumbnail for one image. ?path=<folder>&file=<rel>"""
     folder = request.query.get("path", "")
     rel = request.query.get("file", "")
-    if not _pix_prescreen(folder):      # before isdir - see the list route
+    if not _pix_prescreen(folder):  # before isdir - see the list route
         return web.Response(status=403)
     # The _is_path_under below only proves the file sits inside the folder the
     # CALLER named, which is no containment at all while `folder` is arbitrary
@@ -2209,6 +2394,7 @@ async def api_lif_thumb(request):
         return web.Response(status=403)
     try:
         import asyncio
+
         loop = asyncio.get_running_loop()
         # PIL decode/resize/encode can be slow for big images - keep it off the
         # aiohttp event loop so other ComfyUI requests don't stall.
@@ -2253,22 +2439,41 @@ async def api_lif_browse(request):
                     seen.add(key)
                 except OSError:
                     continue
-                dirs.append({"name": os.path.basename(d.rstrip("\\/")) or d,
-                             "path": d, "images": -1})
-            return web.json_response({"ok": True, "path": "", "parent": None, "dirs": dirs})
-
-        if not _pix_prescreen(path):    # before isdir - see the list route
+                dirs.append(
+                    {
+                        "name": os.path.basename(d.rstrip("\\/")) or d,
+                        "path": d,
+                        "images": -1,
+                    }
+                )
             return web.json_response(
-                {"ok": False, "message": _pix_denied_message(path), "denied": True, "dirs": []}
+                {"ok": True, "path": "", "parent": None, "dirs": dirs}
+            )
+
+        if not _pix_prescreen(path):  # before isdir - see the list route
+            return web.json_response(
+                {
+                    "ok": False,
+                    "message": _pix_denied_message(path),
+                    "denied": True,
+                    "dirs": [],
+                }
             )
         # allowed-check BEFORE isdir, so the reply cannot distinguish "absent"
         # from "present but not yours" for any path on the disk (round-3).
         if not _pix_folder_allowed(path):
             return web.json_response(
-                {"ok": False, "message": _pix_denied_message(path), "denied": True, "dirs": []}
+                {
+                    "ok": False,
+                    "message": _pix_denied_message(path),
+                    "denied": True,
+                    "dirs": [],
+                }
             )
         if not os.path.isdir(path):
-            return web.json_response({"ok": False, "message": "Folder not found.", "dirs": []})
+            return web.json_response(
+                {"ok": False, "message": "Folder not found.", "dirs": []}
+            )
         real = os.path.realpath(path)
         parent = os.path.dirname(real)
         if parent == real:  # already at a drive / filesystem root
@@ -2285,7 +2490,9 @@ async def api_lif_browse(request):
                 if os.path.isdir(full):
                     subdirs.append((n, full))
         except OSError as e:
-            return web.json_response({"ok": False, "message": f"Could not read folder: {e}", "dirs": []})
+            return web.json_response(
+                {"ok": False, "message": f"Could not read folder: {e}", "dirs": []}
+            )
 
         # Only tally per-folder image counts when cheap (few sub-folders), so
         # browsing into e.g. C:\Windows doesn't stat hundreds of directories.
@@ -2299,7 +2506,9 @@ async def api_lif_browse(request):
                 except OSError:
                     cnt = -1
             dirs.append({"name": n, "path": full, "images": cnt})
-        return web.json_response({"ok": True, "path": real, "parent": parent, "dirs": dirs})
+        return web.json_response(
+            {"ok": True, "path": real, "parent": parent, "dirs": dirs}
+        )
     except Exception as e:
         return web.json_response({"ok": False, "message": str(e), "dirs": []})
 
@@ -2320,6 +2529,7 @@ def _lif_dialog_available():
     """True if SOME native folder dialog tool exists for this platform."""
     import sys
     import shutil
+
     if sys.platform == "win32":
         return shutil.which("powershell") is not None
     if sys.platform == "darwin":
@@ -2329,6 +2539,7 @@ def _lif_dialog_available():
 
 def _lif_dialog_windows(start_path):
     import subprocess
+
     # Show an invisible TopMost owner form, then open the folder dialog inside its
     # Shown event so it inherits the foreground (fixes "opens behind the browser").
     # Start path goes through an env var to avoid quoting issues.
@@ -2353,7 +2564,10 @@ def _lif_dialog_windows(start_path):
     env["LIF_START"] = start_path or ""
     out = subprocess.run(
         ["powershell", "-NoProfile", "-STA", "-Command", ps],
-        capture_output=True, text=True, timeout=300, env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        env=env,
         creationflags=0x08000000,  # CREATE_NO_WINDOW (no console flash)
     )
     return (out.stdout or "").strip()
@@ -2362,17 +2576,24 @@ def _lif_dialog_windows(start_path):
 def _lif_dialog_macos(start_path):
     import subprocess
     import re
+
     script = 'POSIX path of (choose folder with prompt "Choose a folder of images")'
     # Only seed the start location when it's a real dir whose path has no chars
     # that could break out of the AppleScript string literal (?path= is supplied
     # by the caller, so treat it as untrusted).
-    if start_path and os.path.isdir(start_path) and re.match(r'^[^"\\\x00-\x1f]+$', start_path):
+    if (
+        start_path
+        and os.path.isdir(start_path)
+        and re.match(r'^[^"\\\x00-\x1f]+$', start_path)
+    ):
         script = (
             'POSIX path of (choose folder with prompt "Choose a folder of images" '
             f'default location POSIX file "{start_path}")'
         )
     try:
-        out = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=300)
+        out = subprocess.run(
+            ["osascript", "-e", script], capture_output=True, text=True, timeout=300
+        )
         return (out.stdout or "").strip().rstrip("/") if out.returncode == 0 else ""
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return ""
@@ -2381,13 +2602,25 @@ def _lif_dialog_macos(start_path):
 def _lif_dialog_linux(start_path):
     import shutil
     import subprocess
-    start = start_path if (start_path and os.path.isdir(start_path)) else os.path.expanduser("~")
+
+    start = (
+        start_path
+        if (start_path and os.path.isdir(start_path))
+        else os.path.expanduser("~")
+    )
     if shutil.which("zenity"):
         try:
             out = subprocess.run(
-                ["zenity", "--file-selection", "--directory",
-                 "--title=Choose a folder of images", f"--filename={start}/"],
-                capture_output=True, text=True, timeout=300,
+                [
+                    "zenity",
+                    "--file-selection",
+                    "--directory",
+                    "--title=Choose a folder of images",
+                    f"--filename={start}/",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300,
             )
             return (out.stdout or "").strip() if out.returncode == 0 else ""
         except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -2395,8 +2628,16 @@ def _lif_dialog_linux(start_path):
     if shutil.which("kdialog"):
         try:
             out = subprocess.run(
-                ["kdialog", "--getexistingdirectory", start, "--title", "Choose a folder of images"],
-                capture_output=True, text=True, timeout=300,
+                [
+                    "kdialog",
+                    "--getexistingdirectory",
+                    start,
+                    "--title",
+                    "Choose a folder of images",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300,
             )
             return (out.stdout or "").strip() if out.returncode == 0 else ""
         except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -2412,6 +2653,7 @@ def _lif_native_folder_dialog(start_path=""):
         return None  # a dialog is already open elsewhere -> caller falls back
     try:
         import sys
+
         if sys.platform == "win32":
             return _lif_dialog_windows(start_path)
         if sys.platform == "darwin":
@@ -2457,6 +2699,7 @@ async def api_lif_pick_native(request):
         start = ""
     try:
         import asyncio
+
         loop = asyncio.get_running_loop()
         path = await loop.run_in_executor(None, _lif_native_folder_dialog, start)
         if path is None:
@@ -2477,7 +2720,9 @@ async def api_lif_pick_native(request):
             # says "click Browse and pick this folder once" - which they just did
             # - and there is no way out. Round-3 review finding 5.
             remembered = _pix_remember_folder(path)
-            return web.json_response({"ok": True, "path": path, "remembered": bool(remembered)})
+            return web.json_response(
+                {"ok": True, "path": path, "remembered": bool(remembered)}
+            )
         return web.json_response({"ok": False, "cancelled": True})
     except Exception as e:
         return web.json_response({"ok": False, "message": str(e)})
@@ -2498,6 +2743,7 @@ async def api_save_image_file(request):
     folders, which /view cannot reach. Read-only; tokens die with the
     server process."""
     from .nodes.node_save_image import resolve_serve_token
+
     path = resolve_serve_token(request.query.get("t", ""))
     if not path or not os.path.isfile(path):
         return web.Response(status=404, text="unknown or expired preview token")
@@ -2508,7 +2754,12 @@ async def api_save_image_file(request):
     # <img> preview survives either way because browsers sniff images, but the
     # node's "Open" button does window.open on this URL, and octet-stream makes
     # the browser DOWNLOAD the file instead of showing it.
-    _CT = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+    _CT = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }
     ct = _CT.get(os.path.splitext(path)[1].lower())
     return web.FileResponse(path, headers={"Content-Type": ct} if ct else None)
 
@@ -2534,6 +2785,7 @@ async def api_save_video_file(request):
       browser download the file instead of playing it.
     """
     from .nodes.node_save_video import resolve_serve_token
+
     path = resolve_serve_token(request.query.get("t", ""))
     if not path or not os.path.isfile(path):
         return web.Response(status=404, text="unknown or expired video token")
@@ -2599,6 +2851,7 @@ async def api_save_image_next_counter(request):
 
     try:
         import asyncio
+
         loop = asyncio.get_running_loop()
         counter, resolved, denied = await loop.run_in_executor(None, _scan)
         out = {"ok": True, "counter": counter, "resolved": resolved}
@@ -2633,21 +2886,26 @@ async def api_save_image_open_folder(request):
     if not isinstance(data, dict):
         data = {}
     folder_raw = str(data.get("folder", "") or "")
-    if not _pix_prescreen_field(folder_raw):    # expansion-aware, see round-3 #4
+    if not _pix_prescreen_field(folder_raw):  # expansion-aware, see round-3 #4
         return web.json_response(
             {"ok": False, "message": _pix_denied_message(folder_raw), "denied": True}
         )
     path, _inside = _resolve_save_folder(folder_raw)
     if not _pix_folder_allowed(path):
-        return web.json_response({"ok": False, "message": _pix_denied_message(path), "denied": True})
+        return web.json_response(
+            {"ok": False, "message": _pix_denied_message(path), "denied": True}
+        )
     if not os.path.isdir(path):
-        return web.json_response({
-            "ok": False,
-            "message": "Folder does not exist yet - it is created on the first save.",
-        })
+        return web.json_response(
+            {
+                "ok": False,
+                "message": "Folder does not exist yet - it is created on the first save.",
+            }
+        )
     try:
         import subprocess
         import sys
+
         if sys.platform == "win32":
             # Plain open ONLY. The window may land behind the browser (the JS
             # status line says to check the taskbar). Do NOT re-add the
@@ -2671,6 +2929,7 @@ async def api_save_image_open_folder(request):
 # readout, preview thumbnails, and the OPTIONAL (user-clicked) Civitai lookup.
 # Everything except /civitai is fully offline. Every route realpath-guards to the
 # configured loras directories so a crafted ?name= can't read outside them.
+
 
 def _lora_dirs():
     try:
@@ -2704,7 +2963,9 @@ def _civitai_account_file():
     if not base:
         # Very old ComfyUI without get_user_directory: fall back to a sibling of
         # this plugin rather than refusing to store anything at all.
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "user")
+        base = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "user"
+        )
     d = os.path.join(base, "pixaroma")
     try:
         os.makedirs(d, exist_ok=True)
@@ -2733,8 +2994,10 @@ def _civitai_public_account(acc):
 @PromptServer.instance.routes.get("/pixaroma/api/civitai/account")
 async def api_civitai_account_get(request):
     """Whether a key is configured, and the two lookup preferences. Never the key."""
-    return web.json_response(_civitai_public_account(_civitai_account()),
-                             headers={"Cache-Control": "no-store"})
+    return web.json_response(
+        _civitai_public_account(_civitai_account()),
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @PromptServer.instance.routes.post("/pixaroma/api/civitai/account")
@@ -2756,20 +3019,27 @@ async def api_civitai_account_set(request):
         else:
             k = _civitai_sanitize_key(raw)
             if not k:
-                return web.json_response({
-                    "ok": False,
-                    "message": "That does not look like an API key - it should be one "
-                               "run of ordinary characters with no spaces.",
-                }, headers={"Cache-Control": "no-store"})
+                return web.json_response(
+                    {
+                        "ok": False,
+                        "message": "That does not look like an API key - it should be one "
+                        "run of ordinary characters with no spaces.",
+                    },
+                    headers={"Cache-Control": "no-store"},
+                )
             acc["key"] = k
     if body.get("host") in ("com", "red"):
         acc["host"] = body["host"]
     if "adultThumbs" in body:
         acc["adult_thumbs"] = bool(body.get("adultThumbs"))
     if not _civitai_write_account(_civitai_account_file(), acc):
-        return web.json_response({"ok": False, "message": "Could not save the settings file."},
-                                 headers={"Cache-Control": "no-store"})
-    return web.json_response(_civitai_public_account(acc), headers={"Cache-Control": "no-store"})
+        return web.json_response(
+            {"ok": False, "message": "Could not save the settings file."},
+            headers={"Cache-Control": "no-store"},
+        )
+    return web.json_response(
+        _civitai_public_account(acc), headers={"Cache-Control": "no-store"}
+    )
 
 
 def _resolve_lora_path(name):
@@ -2818,12 +3088,15 @@ async def api_lora_info(request):
         return web.json_response({"ok": False, "message": "LoRA not found."})
     try:
         import asyncio
+
         loop = asyncio.get_event_loop()
         # Header read is small but hashing/sidecar I/O is disk-bound - keep it off
         # the aiohttp event loop.
         info = await loop.run_in_executor(None, _lora_build_info, path)
     except Exception as exc:
-        return web.json_response({"ok": False, "message": "Could not read: {}".format(exc)})
+        return web.json_response(
+            {"ok": False, "message": "Could not read: {}".format(exc)}
+        )
     # The user's own words ride along with the file's and Civitai's, so the panel
     # gets all three sources in one request and can show them the moment it opens.
     try:
@@ -2848,7 +3121,9 @@ async def api_lora_info(request):
     # a stale version and defeat the very mechanism it exists for. aiohttp's
     # json_response sends no cache headers of its own - the same absent-headers
     # class that got our .mjs modules cached, and why /lora/list already says this.
-    return web.json_response({"ok": True, "info": info}, headers={"Cache-Control": "no-store"})
+    return web.json_response(
+        {"ok": True, "info": info}, headers={"Cache-Control": "no-store"}
+    )
 
 
 @PromptServer.instance.routes.get("/pixaroma/api/lora/thumb")
@@ -2890,19 +3165,28 @@ async def api_lora_civitai(request):
     name = request.query.get("name", "")
     path = _resolve_lora_path(name)
     if not path:
-        return web.json_response({"ok": False, "reason": "notfound", "message": "LoRA not found."})
+        return web.json_response(
+            {"ok": False, "reason": "notfound", "message": "LoRA not found."}
+        )
     import asyncio
+
     loop = asyncio.get_event_loop()
     try:
         sha = await loop.run_in_executor(None, _lora_file_sha256, path)
     except Exception as exc:
-        return web.json_response({"ok": False, "reason": "offline",
-                                  "message": "Could not read the file: {}".format(exc)})
+        return web.json_response(
+            {
+                "ok": False,
+                "reason": "offline",
+                "message": "Could not read the file: {}".format(exc),
+            }
+        )
     try:
         import aiohttp
     except Exception:
-        return web.json_response({"ok": False, "reason": "offline",
-                                  "message": "Could not reach Civitai."})
+        return web.json_response(
+            {"ok": False, "reason": "offline", "message": "Could not reach Civitai."}
+        )
     # 30s, not 12s: Civitai's API is regularly slow under load, and a lookup that
     # gives up early reads to the user as "it doesn't work", especially on a slow
     # link. The hash is already computed by this point, so this budget is purely
@@ -2958,7 +3242,9 @@ async def api_lora_civitai(request):
                         if not last:
                             last_note = "Not found on {}.".format(host)
                             continue
-                        return web.json_response({"ok": True, "found": False, "reason": "notfound"})
+                        return web.json_response(
+                            {"ok": True, "found": False, "reason": "notfound"}
+                        )
                     if resp.status in (401, 403):
                         # NEVER returns from inside the loop, exactly like the 404 branch
                         # above. A 401/403 is the most HOST-SPECIFIC failure there is - a
@@ -2974,16 +3260,20 @@ async def api_lora_civitai(request):
                         # same mistake aimed at the people most likely to hit it, since
                         # they are the ones who added a key BECAUSE lookups were failing.
                         if acc.get("key"):
-                            key_note = ("Civitai refused the API key ({}). Check it in the node "
-                                        "settings.".format(resp.status))
+                            key_note = (
+                                "Civitai refused the API key ({}). Check it in the node "
+                                "settings.".format(resp.status)
+                            )
                             last_note = key_note
                         else:
                             # Name the likelier cause FIRST. A network-level block covers
                             # both civitai names, so by the time every host has refused,
                             # "your network" is the better guess than "buy a key".
-                            last_note = ("Civitai refused the request ({}). Your network may be "
-                                         "blocking Civitai, or this model may need an API key - "
-                                         "add one in the node settings.".format(resp.status))
+                            last_note = (
+                                "Civitai refused the request ({}). Your network may be "
+                                "blocking Civitai, or this model may need an API key - "
+                                "add one in the node settings.".format(resp.status)
+                            )
                         continue
                     if resp.status != 200:
                         # Rate limit / maintenance / gateway error: transient, so fall
@@ -2992,7 +3282,9 @@ async def api_lora_civitai(request):
                         continue
                     # Captured BEFORE parsing so a non-JSON reply can name what
                     # actually came back.
-                    ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip()
+                    ctype = (
+                        (resp.headers.get("Content-Type") or "").split(";")[0].strip()
+                    )
                     # Read the WHOLE body, in a loop, with the memory cap kept.
                     #
                     # ⚠️ DO NOT go back to `await resp.content.read(N)` with a POSITIVE
@@ -3016,8 +3308,13 @@ async def api_lora_civitai(request):
                     async for chunk in resp.content.iter_chunked(65536):
                         total += len(chunk)
                         if total > 4 * 1024 * 1024:
-                            return web.json_response({"ok": False, "reason": "offline",
-                                                      "message": "Civitai response too large."})
+                            return web.json_response(
+                                {
+                                    "ok": False,
+                                    "reason": "offline",
+                                    "message": "Civitai response too large.",
+                                }
+                            )
                         chunks.append(chunk)
                     body = b"".join(chunks)
                     try:
@@ -3031,9 +3328,11 @@ async def api_lora_civitai(request):
                         # `continue`, never return: the other host is exactly the
                         # backup for a per-domain block (invariant 16).
                         data = None
-                        last_note = ("Civitai replied with {} instead of data - most likely a "
-                                     "block or sign-in page from your network or its protection "
-                                     "layer.".format(ctype or "an unknown format"))
+                        last_note = (
+                            "Civitai replied with {} instead of data - most likely a "
+                            "block or sign-in page from your network or its protection "
+                            "layer.".format(ctype or "an unknown format")
+                        )
                         continue
                     break
         except Exception as exc:
@@ -3049,8 +3348,10 @@ async def api_lora_civitai(request):
                 # completely different. This one should now be unreachable (we pin
                 # Accept-Encoding to gzip/deflate), so if it ever shows up it is
                 # genuinely worth hearing about.
-                last_note = ("Civitai sent a compressed reply this install cannot read ({}). "
-                             "Please report this.".format(kind))
+                last_note = (
+                    "Civitai sent a compressed reply this install cannot read ({}). "
+                    "Please report this.".format(kind)
+                )
             elif "JSON" in kind or "Decode" in kind or "Value" in kind:
                 last_note = "Civitai sent an unreadable reply (a login or block page?)."
             else:
@@ -3059,8 +3360,9 @@ async def api_lora_civitai(request):
     if data is None:
         # A key refusal outranks whatever the later host said: "check your key" is
         # something the user can act on, a trailing timeout is not.
-        return web.json_response({"ok": False, "reason": "offline",
-                                  "message": key_note or last_note})
+        return web.json_response(
+            {"ok": False, "reason": "offline", "message": key_note or last_note}
+        )
     parsed = _lora_parse_civitai(data, allow_adult=bool(acc.get("adult_thumbs")))
     # Civitai answered 200 with a usable record -> FOUND, even when this version
     # happens to carry no trainedWords and no model.name (plenty do not; e.g.
@@ -3087,7 +3389,9 @@ def _lora_custom_file():
     except Exception:
         base = None
     if not base:
-        base = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "user")
+        base = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "user"
+        )
     d = os.path.join(base, "pixaroma")
     try:
         os.makedirs(d, exist_ok=True)
@@ -3164,16 +3468,20 @@ async def api_lora_preview_set(request):
     try:
         raw = base64.b64decode(payload)
     except Exception:
-        return web.json_response({"ok": False, "message": "That picture could not be read."})
+        return web.json_response(
+            {"ok": False, "message": "That picture could not be read."}
+        )
     if not raw or len(raw) > _LORA_PREVIEW_MAX_BYTES:
         return web.json_response({"ok": False, "message": "That picture is too large."})
     if not _wf_looks_like_image(raw):
         return web.json_response(
-            {"ok": False, "message": "That file is not a picture the browser can show."})
+            {"ok": False, "message": "That file is not a picture the browser can show."}
+        )
     if not _lora_preview_path_checked(name):
         return web.json_response({"ok": False, "message": "Bad preview path."})
 
     import asyncio
+
     loop = asyncio.get_event_loop()
     folder = _lora_previews_dir()
     try:
@@ -3181,10 +3489,16 @@ async def api_lora_preview_set(request):
             None, _lora_write_custom_preview, folder, name, raw
         )
     except Exception as exc:
-        return web.json_response({"ok": False, "message": "Could not save: {}".format(exc)})
+        return web.json_response(
+            {"ok": False, "message": "Could not save: {}".format(exc)}
+        )
     if not written:
-        return web.json_response({"ok": False, "message": "Could not save that picture."})
-    return web.json_response({"ok": True, "v": _lora_custom_preview_version(folder, name)})
+        return web.json_response(
+            {"ok": False, "message": "Could not save that picture."}
+        )
+    return web.json_response(
+        {"ok": True, "v": _lora_custom_preview_version(folder, name)}
+    )
 
 
 @PromptServer.instance.routes.post("/pixaroma/api/lora/preview_delete")
@@ -3198,7 +3512,9 @@ async def api_lora_preview_delete(request):
         body = await request.json()
     except Exception:
         body = {}
-    if not isinstance(body, dict):      # see api_lora_preview_set - a truthy non-dict 500s it
+    if not isinstance(
+        body, dict
+    ):  # see api_lora_preview_set - a truthy non-dict 500s it
         body = {}
     name = str(body.get("name", "") or "") or request.query.get("name", "")
     path = _resolve_lora_path(name)
@@ -3210,7 +3526,9 @@ async def api_lora_preview_delete(request):
     try:
         removed = _lora_delete_custom_preview(_lora_previews_dir(), name)
     except Exception as exc:
-        return web.json_response({"ok": False, "message": "Could not remove: {}".format(exc)})
+        return web.json_response(
+            {"ok": False, "message": "Could not remove: {}".format(exc)}
+        )
     return web.json_response({"ok": True, "removed": bool(removed)})
 
 
@@ -3236,13 +3554,16 @@ async def api_lora_custom_triggers(request):
     if not path or not roots or not _is_path_under(path, *roots):
         return web.json_response({"ok": False, "message": "LoRA not found."})
     import asyncio
+
     loop = asyncio.get_event_loop()
     try:
         stored = await loop.run_in_executor(
             None, _lora_set_custom, _lora_custom_file(), name, words
         )
     except Exception as exc:
-        return web.json_response({"ok": False, "message": "Could not save: {}".format(exc)})
+        return web.json_response(
+            {"ok": False, "message": "Could not save: {}".format(exc)}
+        )
     return web.json_response({"ok": True, "words": stored})
 
 
@@ -3263,6 +3584,7 @@ async def api_lora_civitai_delete(request):
     if not path or not roots or not _is_path_under(path, *roots):
         return web.json_response({"ok": False, "message": "LoRA not found."})
     import asyncio
+
     loop = asyncio.get_event_loop()
     ok = await loop.run_in_executor(None, _lora_delete_sidecar, path)
     return web.json_response({"ok": bool(ok)})
@@ -3327,6 +3649,7 @@ def _wf_registered_types():
     """Class names ComfyUI has actually loaded, for the missing-node check."""
     try:
         import nodes as _comfy_nodes
+
         return set(_comfy_nodes.NODE_CLASS_MAPPINGS.keys())
     except Exception:
         return set()
@@ -3352,7 +3675,7 @@ def _wf_read_meta(path):
         if isinstance(data, dict):
             return data
     except FileNotFoundError:
-        return {}                     # first run, nothing to preserve
+        return {}  # first run, nothing to preserve
     except (OSError, ValueError, UnicodeDecodeError, RecursionError):
         # It EXISTS but will not parse. Returning {} here and letting the next
         # save write that back would erase every note, cover and folder colour
@@ -3362,7 +3685,9 @@ def _wf_read_meta(path):
             broken = path + ".broken"
             if not os.path.exists(broken):
                 shutil.copy2(path, broken)
-                print(f"[Pixaroma] workflows sidecar unreadable; kept a copy at {broken}")
+                print(
+                    f"[Pixaroma] workflows sidecar unreadable; kept a copy at {broken}"
+                )
         except OSError:
             pass
     return {}
@@ -3402,20 +3727,36 @@ async def api_workflows_index(request):
     root = _wf_root(request)
     if not os.path.isdir(root):
         return web.json_response(
-            {"ok": True, "entries": [], "folders": [], "collections": [],
-             "issues": {"unsaved_names": [], "duplicates": [], "missing_nodes": []}},
+            {
+                "ok": True,
+                "entries": [],
+                "folders": [],
+                "collections": [],
+                "issues": {"unsaved_names": [], "duplicates": [], "missing_nodes": []},
+            },
             headers={"Cache-Control": "no-store"},
         )
     import asyncio
+
     loop = asyncio.get_event_loop()
     try:
         payload = await loop.run_in_executor(
-            None, _wf_build_payload, root, _wf_cache_path(request), _wf_registered_types()
+            None,
+            _wf_build_payload,
+            root,
+            _wf_cache_path(request),
+            _wf_registered_types(),
         )
     except Exception as e:
         return web.json_response(
-            {"ok": False, "message": str(e), "entries": [], "folders": [],
-             "collections": [], "issues": {}},
+            {
+                "ok": False,
+                "message": str(e),
+                "entries": [],
+                "folders": [],
+                "collections": [],
+                "issues": {},
+            },
             headers={"Cache-Control": "no-store"},
         )
     # no-store, or a browser can heuristically cache this and show a workflow
@@ -3448,6 +3789,7 @@ async def api_workflows_meta_get(request):
     # stat per cover on a slow or networked drive would stall generation
     # progress for everyone.
     import asyncio
+
     async with _WF_META_LOCK:
         loop = asyncio.get_event_loop()
         data = await loop.run_in_executor(None, _wf_read_and_heal_meta, request)
@@ -3455,8 +3797,9 @@ async def api_workflows_meta_get(request):
         data.setdefault(k, {})
     for k in _WF_META_LISTS:
         data.setdefault(k, [])
-    return web.json_response({"ok": True, "meta": data},
-                             headers={"Cache-Control": "no-store"})
+    return web.json_response(
+        {"ok": True, "meta": data}, headers={"Cache-Control": "no-store"}
+    )
 
 
 def _wf_read_and_heal_meta(request):
@@ -3518,13 +3861,17 @@ def _wf_apply_meta_patch(request, patch):
         for k, v in incoming.items():
             old = current.get(k)
             if v is None:
-                current.pop(k, None)            # an explicit null clears one entry
+                current.pop(k, None)  # an explicit null clears one entry
             else:
                 # A covers record names a FILE WE WILL LATER DELETE, so refuse a
                 # filename we could not have written rather than storing it and
                 # finding out at os.remove time.
-                if section == "covers" and isinstance(v, dict) and "file" in v \
-                        and not _wf_is_cover_name(v.get("file")):
+                if (
+                    section == "covers"
+                    and isinstance(v, dict)
+                    and "file" in v
+                    and not _wf_is_cover_name(v.get("file"))
+                ):
                     continue
                 # A run's own output must NEVER replace a picture the user chose
                 # by hand. The automatic capture fires on every execution and
@@ -3536,9 +3883,13 @@ def _wf_apply_meta_patch(request, patch):
                 # "Remove cover" clears the key, which is how the user opts back
                 # in to their own output filling it - exactly what its tooltip
                 # promises.
-                if section == "covers" and isinstance(v, dict) \
-                        and v.get("kind") == "output" \
-                        and isinstance(old, dict) and old.get("kind") == "file":
+                if (
+                    section == "covers"
+                    and isinstance(v, dict)
+                    and v.get("kind") == "output"
+                    and isinstance(old, dict)
+                    and old.get("kind") == "file"
+                ):
                     continue
                 current[k] = v
             # Overwriting a cover strands its old picture just as surely as
@@ -3565,14 +3916,14 @@ def _wf_apply_meta_patch(request, patch):
     if ok:
         for name in orphan_candidates:
             if _wf_cover_referenced(data, name):
-                continue                        # something else still wants it
+                continue  # something else still wants it
             target = _wf_cover_path(request, name)
             if not target:
-                continue                        # not a name we could have written
+                continue  # not a name we could have written
             try:
                 os.remove(target)
             except OSError:
-                pass                            # already gone, or in use
+                pass  # already gone, or in use
     return web.json_response({"ok": ok, "meta": data})
 
 
@@ -3592,14 +3943,22 @@ async def api_workflows_folder(request):
 
     if action == "create":
         if not path:
-            return web.json_response({"ok": False, "message": "Give the folder a name."})
+            return web.json_response(
+                {"ok": False, "message": "Give the folder a name."}
+            )
         bad = _wf_reserved_part(root, path)
         if bad:
             return web.json_response(
-                {"ok": False, "message": f'"{bad}" is a name Windows keeps for itself. '
-                                         f"Pick another one."})
+                {
+                    "ok": False,
+                    "message": f'"{bad}" is a name Windows keeps for itself. '
+                    f"Pick another one.",
+                }
+            )
         if os.path.exists(path):
-            return web.json_response({"ok": False, "message": "That folder already exists."})
+            return web.json_response(
+                {"ok": False, "message": "That folder already exists."}
+            )
         try:
             os.makedirs(path)
         except OSError as e:
@@ -3615,10 +3974,16 @@ async def api_workflows_folder(request):
         bad = _wf_reserved_part(root, new_path)
         if bad:
             return web.json_response(
-                {"ok": False, "message": f'"{bad}" is a name Windows keeps for itself. '
-                                         f"Pick another one."})
+                {
+                    "ok": False,
+                    "message": f'"{bad}" is a name Windows keeps for itself. '
+                    f"Pick another one.",
+                }
+            )
         if os.path.exists(new_path):
-            return web.json_response({"ok": False, "message": "A folder with that name already exists."})
+            return web.json_response(
+                {"ok": False, "message": "A folder with that name already exists."}
+            )
         try:
             os.rename(path, new_path)
         except OSError as e:
@@ -3635,7 +4000,11 @@ async def api_workflows_folder(request):
             os.rmdir(path)
         except OSError:
             return web.json_response(
-                {"ok": False, "message": "That folder still has things in it. Empty it first."})
+                {
+                    "ok": False,
+                    "message": "That folder still has things in it. Empty it first.",
+                }
+            )
         return web.json_response({"ok": True})
 
     return web.json_response({"ok": False, "message": "Unknown action."})
@@ -3659,6 +4028,7 @@ async def api_workflows_reveal(request):
     try:
         import subprocess
         import sys
+
         if sys.platform == "win32":
             # Plain open only - see the Save Image reveal route for why a
             # bring-to-front script must never be re-added here.
@@ -3822,7 +4192,7 @@ def _wf_migrate_embedded_covers(request, data):
             payload = url.split(",", 1)[1]
             raw = base64.b64decode(payload)
         except Exception:
-            covers.pop(rel, None)          # unreadable leftover, drop it
+            covers.pop(rel, None)  # unreadable leftover, drop it
             changed = True
             continue
         if not raw:
@@ -3835,7 +4205,7 @@ def _wf_migrate_embedded_covers(request, data):
             with open(os.path.join(_wf_covers_dir(request), name), "wb") as f:
                 f.write(raw)
         except OSError:
-            continue                        # leave it embedded rather than lose it
+            continue  # leave it embedded rather than lose it
         covers[rel] = {"kind": "file", "file": name, "v": 1}
         changed = True
     return changed
@@ -3864,12 +4234,15 @@ async def api_workflows_cover_set(request):
     try:
         raw = base64.b64decode(payload)
     except Exception:
-        return web.json_response({"ok": False, "message": "That picture could not be read."})
+        return web.json_response(
+            {"ok": False, "message": "That picture could not be read."}
+        )
     if not raw or len(raw) > _WF_COVER_MAX_BYTES:
         return web.json_response({"ok": False, "message": "That picture is too large."})
     if not _wf_looks_like_image(raw):
         return web.json_response(
-            {"ok": False, "message": "That file is not a picture the browser can show."})
+            {"ok": False, "message": "That file is not a picture the browser can show."}
+        )
 
     name = _wf_cover_name(rel)
     folder = _wf_covers_dir(request, create=True)
@@ -3942,7 +4315,9 @@ def _wf_record_cover(request, rel, name):
                 os.remove(os.path.join(folder, name))
             except OSError:
                 pass
-        return web.json_response({"ok": False, "message": "Could not save the cover setting."})
+        return web.json_response(
+            {"ok": False, "message": "Could not save the cover setting."}
+        )
     # Only after the write landed, and with the same guards as everywhere else:
     # the shape check (a corrupt record must not aim os.remove), the reference
     # check against the FINAL state, and _wf_cover_path as the one way a name
@@ -3993,7 +4368,9 @@ async def api_duration_preview(request):
     import math
 
     from .nodes._duration_helpers import (
-        frames_from_formula, frames_from_seconds, MAX_FORMULA_LEN,
+        frames_from_formula,
+        frames_from_seconds,
+        MAX_FORMULA_LEN,
     )
 
     try:
@@ -4042,7 +4419,18 @@ async def api_duration_preview(request):
 # widgets. Convention #18: the picker re-fetches on EVERY open and this answer
 # is never cached, so a file dropped in the input folder shows up without a
 # refresh, let alone a restart.
-_AUDIO_EXTS = (".wav", ".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wma", ".aiff", ".aif")
+_AUDIO_EXTS = (
+    ".wav",
+    ".mp3",
+    ".flac",
+    ".ogg",
+    ".opus",
+    ".m4a",
+    ".aac",
+    ".wma",
+    ".aiff",
+    ".aif",
+)
 
 
 @PromptServer.instance.routes.get("/pixaroma/api/load_audio/list")
@@ -4084,7 +4472,7 @@ async def api_load_audio_list(request):
 # request can name a file we did not ship. Nothing here builds a path out of
 # user text, so there is no join to get wrong (.claude/patterns/path-containment.md).
 
-_VP_MAX_FORMULA = 400_000      # ~30x the largest shipped formula
+_VP_MAX_FORMULA = 400_000  # ~30x the largest shipped formula
 _VP_MAX_TIERS = 24
 _VP_MAX_TIER_VALUE = 40_000
 _VP_MAX_TIER_NAME = 200
@@ -4115,7 +4503,10 @@ async def api_video_prompt_formulas(request):
             }
         except Exception:
             out["modes"][mode] = {
-                "formula": "", "chars": 0, "edited": False, "durations": [],
+                "formula": "",
+                "chars": 0,
+                "edited": False,
+                "durations": [],
             }
     try:
         out["models"] = list(folder_paths.get_filename_list("text_encoders"))
@@ -4137,19 +4528,27 @@ async def api_video_prompt_save_formula(request):
         data = None
     # request.json() returns ANY type, so never assume a dict.
     if not isinstance(data, dict):
-        return web.json_response({"ok": False, "error": "bad body"}, status=400,
-                                 headers=_vp_no_store())
+        return web.json_response(
+            {"ok": False, "error": "bad body"}, status=400, headers=_vp_no_store()
+        )
     mode = data.get("mode")
     text = data.get("text")
     if not _vp.valid_mode(mode):
-        return web.json_response({"ok": False, "error": "unknown mode"}, status=400,
-                                 headers=_vp_no_store())
+        return web.json_response(
+            {"ok": False, "error": "unknown mode"}, status=400, headers=_vp_no_store()
+        )
     if not isinstance(text, str):
-        return web.json_response({"ok": False, "error": "text must be a string"},
-                                 status=400, headers=_vp_no_store())
+        return web.json_response(
+            {"ok": False, "error": "text must be a string"},
+            status=400,
+            headers=_vp_no_store(),
+        )
     if len(text) > _VP_MAX_FORMULA:
-        return web.json_response({"ok": False, "error": "formula too large"},
-                                 status=413, headers=_vp_no_store())
+        return web.json_response(
+            {"ok": False, "error": "formula too large"},
+            status=413,
+            headers=_vp_no_store(),
+        )
     ok = _vp.save_formula(mode, text)
     return web.json_response({"ok": bool(ok)}, headers=_vp_no_store())
 
@@ -4161,19 +4560,25 @@ async def api_video_prompt_save_durations(request):
     except Exception:
         data = None
     if not isinstance(data, dict):
-        return web.json_response({"ok": False, "error": "bad body"}, status=400,
-                                 headers=_vp_no_store())
+        return web.json_response(
+            {"ok": False, "error": "bad body"}, status=400, headers=_vp_no_store()
+        )
     mode = data.get("mode")
     tiers = data.get("tiers")
     if not _vp.valid_mode(mode):
-        return web.json_response({"ok": False, "error": "unknown mode"}, status=400,
-                                 headers=_vp_no_store())
+        return web.json_response(
+            {"ok": False, "error": "unknown mode"}, status=400, headers=_vp_no_store()
+        )
     if not isinstance(tiers, list) or not tiers:
-        return web.json_response({"ok": False, "error": "tiers must be a list"},
-                                 status=400, headers=_vp_no_store())
+        return web.json_response(
+            {"ok": False, "error": "tiers must be a list"},
+            status=400,
+            headers=_vp_no_store(),
+        )
     if len(tiers) > _VP_MAX_TIERS:
-        return web.json_response({"ok": False, "error": "too many tiers"},
-                                 status=413, headers=_vp_no_store())
+        return web.json_response(
+            {"ok": False, "error": "too many tiers"}, status=413, headers=_vp_no_store()
+        )
     for item in tiers:
         if not isinstance(item, dict):
             continue
@@ -4181,11 +4586,17 @@ async def api_video_prompt_save_durations(request):
         # POST could write ~20 MB of tier names (aiohttp's client_max_size) into
         # the user dir, repeatably, each then rendering as a chip label.
         if len(str(item.get("name", ""))) > _VP_MAX_TIER_NAME:
-            return web.json_response({"ok": False, "error": "tier name too long"},
-                                     status=413, headers=_vp_no_store())
+            return web.json_response(
+                {"ok": False, "error": "tier name too long"},
+                status=413,
+                headers=_vp_no_store(),
+            )
         if len(str(item.get("value", ""))) > _VP_MAX_TIER_VALUE:
-            return web.json_response({"ok": False, "error": "tier too large"},
-                                     status=413, headers=_vp_no_store())
+            return web.json_response(
+                {"ok": False, "error": "tier too large"},
+                status=413,
+                headers=_vp_no_store(),
+            )
     ok = _vp.save_durations(mode, tiers)
     return web.json_response({"ok": bool(ok)}, headers=_vp_no_store())
 
@@ -4198,12 +4609,14 @@ async def api_video_prompt_reset(request):
     except Exception:
         data = None
     if not isinstance(data, dict):
-        return web.json_response({"ok": False, "error": "bad body"}, status=400,
-                                 headers=_vp_no_store())
+        return web.json_response(
+            {"ok": False, "error": "bad body"}, status=400, headers=_vp_no_store()
+        )
     mode = data.get("mode")
     if not _vp.valid_mode(mode):
-        return web.json_response({"ok": False, "error": "unknown mode"}, status=400,
-                                 headers=_vp_no_store())
+        return web.json_response(
+            {"ok": False, "error": "unknown mode"}, status=400, headers=_vp_no_store()
+        )
     ok = _vp.reset_formula(mode)
     return web.json_response({"ok": bool(ok)}, headers=_vp_no_store())
 
@@ -4299,11 +4712,13 @@ async def api_ai_prompt_preset_save(request):
     except Exception:
         data = None
     if not isinstance(data, dict):
-        return web.json_response({"ok": False, "error": "bad body"}, status=400,
-                                 headers=_vp_no_store())
+        return web.json_response(
+            {"ok": False, "error": "bad body"}, status=400, headers=_vp_no_store()
+        )
     ok, message = _aip.save_user(data)
-    return web.json_response({"ok": bool(ok), "message": message},
-                             headers=_vp_no_store())
+    return web.json_response(
+        {"ok": bool(ok), "message": message}, headers=_vp_no_store()
+    )
 
 
 @PromptServer.instance.routes.post("/pixaroma/api/ai_prompt/presets/delete")
@@ -4314,11 +4729,13 @@ async def api_ai_prompt_preset_delete(request):
     except Exception:
         data = None
     if not isinstance(data, dict):
-        return web.json_response({"ok": False, "error": "bad body"}, status=400,
-                                 headers=_vp_no_store())
+        return web.json_response(
+            {"ok": False, "error": "bad body"}, status=400, headers=_vp_no_store()
+        )
     ok, message = _aip.delete_user(data.get("name"))
-    return web.json_response({"ok": bool(ok), "message": message},
-                             headers=_vp_no_store())
+    return web.json_response(
+        {"ok": bool(ok), "message": message}, headers=_vp_no_store()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -4390,10 +4807,12 @@ async def api_save_text_write(request):
 
     payload_len = len(content.encode("utf-8"))
     if payload_len > _SAVE_TEXT_MAX_BYTES:
-        return web.json_response({
-            "ok": False,
-            "message": "That is more text than this node will write (limit 5 MB).",
-        })
+        return web.json_response(
+            {
+                "ok": False,
+                "message": "That is more text than this node will write (limit 5 MB).",
+            }
+        )
 
     # ORDER IS THE INVARIANT (path-containment #5): prescreen the RAW field
     # first, because _resolve_save_folder expands %VARS% and ~ and then
@@ -4415,7 +4834,11 @@ async def api_save_text_write(request):
             # "%USERNAME%/%COMPUTERNAME%" came back as the real Windows user and
             # machine name, turning a refusal into an environment oracle. The
             # sibling next_counter route echoes the raw string for this reason.
-            return {"ok": False, "message": _pix_denied_message(folder_raw), "denied": True}
+            return {
+                "ok": False,
+                "message": _pix_denied_message(folder_raw),
+                "denied": True,
+            }
 
         # _safe_prefix handles the folder segments, rejects '..' and a leading
         # '/', and neutralises the characters Windows forbids. It returns None
@@ -4439,7 +4862,9 @@ async def api_save_text_write(request):
         parent = base
         for seg in parts[:-1]:
             if "%counter%" in seg:
-                seg = seg.replace("%counter%", f"{_next_counter(parent, seg):0{digits}}")
+                seg = seg.replace(
+                    "%counter%", f"{_next_counter(parent, seg):0{digits}}"
+                )
             dirs.append(seg)
             parent = os.path.join(parent, seg)
 
@@ -4506,7 +4931,10 @@ async def api_save_text_write(request):
                     rel_final = "/".join(dirs + [final_leaf])
                     path = _contained(rel_final)
                     if not path:
-                        return {"ok": False, "message": "That file name is not allowed."}
+                        return {
+                            "ok": False,
+                            "message": "That file name is not allowed.",
+                        }
                 except OSError as e:
                     return {"ok": False, "message": f"Could not create the file: {e}"}
             if not claimed:
@@ -4578,7 +5006,9 @@ async def api_save_text_write(request):
             "path": path,
             "folder": base,
             "bytes": payload_len,
-            "entries": _st_count_entries(content, str(data.get("separator") or "blank")),
+            "entries": _st_count_entries(
+                content, str(data.get("separator") or "blank")
+            ),
         }
 
     try:
@@ -4602,6 +5032,7 @@ async def api_save_text_write(request):
 async def api_music_prompt_presets(request):
     try:
         from .nodes import _music_prompt_presets as mps
+
         return web.json_response(
             {
                 "shipped": mps.shipped(),
@@ -4627,6 +5058,7 @@ async def api_music_prompt_presets_save(request):
         if not isinstance(data, dict):
             return web.json_response({"ok": False, "message": "Expected an object."})
         from .nodes import _music_prompt_presets as mps
+
         ok, message = mps.save_user(data)
         return web.json_response({"ok": bool(ok), "message": message})
     except Exception as e:
@@ -4639,6 +5071,7 @@ async def api_music_prompt_presets_delete(request):
         data = await request.json()
         name = data.get("name") if isinstance(data, dict) else None
         from .nodes import _music_prompt_presets as mps
+
         ok, message = mps.delete_user(name)
         return web.json_response({"ok": bool(ok), "message": message})
     except Exception as e:
@@ -4668,14 +5101,14 @@ async def api_music_prompt_presets_delete(request):
 
 _PIX_MON_GPU_LOCK = threading.Lock()
 _PIX_MON_GPU = {
-    "at": 0.0,      # monotonic time of the last successful read
-    "rows": [],     # parsed nvidia-smi rows
+    "at": 0.0,  # monotonic time of the last successful read
+    "rows": [],  # parsed nvidia-smi rows
     "busy": False,  # a refresh thread is already running
-    "fails": 0,     # consecutive failures
-    "off": False,   # give up permanently for this session
+    "fails": 0,  # consecutive failures
+    "off": False,  # give up permanently for this session
 }
-_PIX_MON_GPU_MIN_AGE = 0.75   # never spawn a refresh more often than this
-_PIX_MON_GPU_MAX_FAILS = 3    # then stop spawning processes for good
+_PIX_MON_GPU_MIN_AGE = 0.75  # never spawn a refresh more often than this
+_PIX_MON_GPU_MAX_FAILS = 3  # then stop spawning processes for good
 
 
 def _pix_mon_smi_path():

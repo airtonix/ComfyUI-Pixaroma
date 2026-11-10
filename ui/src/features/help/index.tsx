@@ -1,6 +1,8 @@
 import { lazy } from "react";
 
-const HelpBrowser = lazy(() => import("./HelpBrowser").then((module) => ({ default: module.HelpBrowser })));
+const HelpBrowser = lazy(() =>
+  import("./HelpBrowser").then((module) => ({ default: module.HelpBrowser })),
+);
 
 export const widget = {
   id: "help",

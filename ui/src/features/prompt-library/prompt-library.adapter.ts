@@ -8,7 +8,10 @@ import { normalizePromptRecord } from "./prompt-library-markdown";
 import { pixApiUrl } from "@/adapters/comfy/assets";
 import { notifyPromptLibrary } from "./prompt-library-bridge";
 
-export type PromptLibraryFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+export type PromptLibraryFetch = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
 
 export class PromptLibraryApiError extends Error {
   readonly route: string;
@@ -43,15 +46,20 @@ function errorMessage(payload: unknown, status: number): { message: string; code
   if (payload && typeof payload === "object") {
     const body = payload as Record<string, unknown>;
     const error = body.error;
-    if (typeof error === "string" && error.trim()) return { message: error.trim(), code: typeof body.code === "string" ? body.code : undefined };
+    if (typeof error === "string" && error.trim())
+      return { message: error.trim(), code: typeof body.code === "string" ? body.code : undefined };
     if (error && typeof error === "object") {
       const nested = error as Record<string, unknown>;
       if (typeof nested.message === "string" && nested.message.trim()) {
-        return { message: nested.message.trim(), code: typeof nested.code === "string" ? nested.code : undefined };
+        return {
+          message: nested.message.trim(),
+          code: typeof nested.code === "string" ? nested.code : undefined,
+        };
       }
     }
     for (const key of ["message", "detail", "details"]) {
-      if (typeof body[key] === "string" && (body[key] as string).trim()) return { message: (body[key] as string).trim() };
+      if (typeof body[key] === "string" && (body[key] as string).trim())
+        return { message: (body[key] as string).trim() };
     }
   }
   if (typeof payload === "string" && payload.trim()) return { message: payload.trim() };
@@ -65,7 +73,9 @@ async function readPayload(response: Response, route: string): Promise<unknown> 
     return JSON.parse(text);
   } catch {
     throw new PromptLibraryApiError(
-      response.ok ? "Prompt library returned invalid JSON" : `Prompt library request failed with a non-JSON response (${response.status})`,
+      response.ok
+        ? "Prompt library returned invalid JSON"
+        : `Prompt library request failed with a non-JSON response (${response.status})`,
       route,
       response.status,
       "invalid_json",
@@ -74,11 +84,17 @@ async function readPayload(response: Response, route: string): Promise<unknown> 
 }
 
 function invalidResponse(message: string, route: string): PromptLibraryApiError {
-  return new PromptLibraryApiError(`Invalid prompt library response: ${message}`, route, undefined, "invalid_response");
+  return new PromptLibraryApiError(
+    `Invalid prompt library response: ${message}`,
+    route,
+    undefined,
+    "invalid_response",
+  );
 }
 
 function normalizedLibrary(payload: unknown, route: string): PromptLibraryLoadResult {
-  if (!payload || typeof payload !== "object") throw invalidResponse("response must be an object", route);
+  if (!payload || typeof payload !== "object")
+    throw invalidResponse("response must be an object", route);
   const value = payload as Record<string, unknown>;
   if (value.version !== 1) throw invalidResponse("version must be 1", route);
   if (!Array.isArray(value.prompts)) throw invalidResponse("prompts must be an array", route);
@@ -88,17 +104,26 @@ function normalizedLibrary(payload: unknown, route: string): PromptLibraryLoadRe
   const byId = new Map<string, PromptRecord>();
   const duplicates = new Set<string>();
   for (const [index, recordValue] of value.prompts.entries()) {
-    const sourcePath = recordValue && typeof recordValue === "object" && typeof (recordValue as Record<string, unknown>).sourcePath === "string"
-      ? (recordValue as Record<string, string>).sourcePath
-      : `prompts[${index}]`;
+    const sourcePath =
+      recordValue &&
+      typeof recordValue === "object" &&
+      typeof (recordValue as Record<string, unknown>).sourcePath === "string"
+        ? (recordValue as Record<string, string>).sourcePath
+        : `prompts[${index}]`;
     try {
       const record = normalizePromptRecord(recordValue);
       const key = record.id.toLocaleLowerCase();
       const previous = byId.get(key);
       if (previous) {
         duplicates.add(key);
-        errors.push({ sourcePath: previous.sourcePath, message: `duplicate id "${key}" conflicts with ${record.sourcePath}` });
-        errors.push({ sourcePath: record.sourcePath, message: `duplicate id "${key}" conflicts with ${previous.sourcePath}` });
+        errors.push({
+          sourcePath: previous.sourcePath,
+          message: `duplicate id "${key}" conflicts with ${record.sourcePath}`,
+        });
+        errors.push({
+          sourcePath: record.sourcePath,
+          message: `duplicate id "${key}" conflicts with ${previous.sourcePath}`,
+        });
       } else if (!duplicates.has(key)) {
         byId.set(key, record);
       }
@@ -112,7 +137,9 @@ function normalizedLibrary(payload: unknown, route: string): PromptLibraryLoadRe
   return { library: { version: 1, prompts }, errors };
 }
 
-export function createPromptLibraryAdapter(options: PromptLibraryAdapterOptions = {}): PromptLibraryAdapter {
+export function createPromptLibraryAdapter(
+  options: PromptLibraryAdapterOptions = {},
+): PromptLibraryAdapter {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetchImpl = options.fetchImpl ?? fetch;
   let latestLibraryRequest = 0;
@@ -169,7 +196,8 @@ export function createPromptLibraryAdapter(options: PromptLibraryAdapterOptions 
         body: JSON.stringify(saveRequest),
         signal,
       });
-      const value = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+      const value =
+        payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
       if (!("prompt" in value)) throw invalidResponse("prompt must be an object", route);
       try {
         const prompt = normalizePromptRecord(value.prompt);
@@ -177,7 +205,12 @@ export function createPromptLibraryAdapter(options: PromptLibraryAdapterOptions 
           ? normalizedLibrary(value.library, route).library
           : {
               version: 1 as const,
-              prompts: [...(latestLibrary?.prompts ?? []).filter((item) => item.id !== prompt.id && item.id !== (saveRequest.previous_id ?? "")), prompt],
+              prompts: [
+                ...(latestLibrary?.prompts ?? []).filter(
+                  (item) => item.id !== prompt.id && item.id !== (saveRequest.previous_id ?? ""),
+                ),
+                prompt,
+              ],
             };
         latestLibrary = mutationLibrary;
         notifyPromptLibrary(mutationLibrary);

@@ -28,14 +28,16 @@ export let widgets: WidgetDefinition[] = [];
 
 export function loadWidgets() {
   if (!loadingFeatures) {
-    loadingFeatures = Promise.all(Object.values(featureModules).map((load) => load())).then((features) => {
-      loadedFeatures = features;
-      widgets = features
-        .map((module) => module.widget)
-        .filter((widget): widget is WidgetDefinition => Boolean(widget))
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.label.localeCompare(b.label));
-      return widgets;
-    });
+    loadingFeatures = Promise.all(Object.values(featureModules).map((load) => load())).then(
+      (features) => {
+        loadedFeatures = features;
+        widgets = features
+          .map((module) => module.widget)
+          .filter((widget): widget is WidgetDefinition => Boolean(widget))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.label.localeCompare(b.label));
+        return widgets;
+      },
+    );
   }
   return loadingFeatures;
 }

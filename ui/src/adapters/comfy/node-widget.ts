@@ -35,7 +35,10 @@ export type NodeWidgetActions<State> = {
 export type NodeWidgetProps<State> = NodeWidgetModel<State> & NodeWidgetActions<State>;
 export type NodeWidgetComponent<State> = ComponentType<NodeWidgetProps<State>>;
 export type NodeWidgetCleanup = () => void;
-export type NodeWidgetMount<Props = unknown> = (host: NodeWidgetHost, props: Props) => NodeWidgetCleanup;
+export type NodeWidgetMount<Props = unknown> = (
+  host: NodeWidgetHost,
+  props: Props,
+) => NodeWidgetCleanup;
 
 export type NodeWidgetHandle<State> = {
   update(model: NodeWidgetModel<State>): void;
@@ -62,7 +65,10 @@ function unmountExisting(element: HTMLElement) {
   roots.get(element)?.unmount();
 }
 
-function createActions<State>(host: NodeWidgetHost, actions: Omit<NodeWidgetActions<State>, "onResizeRequest" | "onDirtyCanvas">) {
+function createActions<State>(
+  host: NodeWidgetHost,
+  actions: Omit<NodeWidgetActions<State>, "onResizeRequest" | "onDirtyCanvas">,
+) {
   return {
     ...actions,
     onResizeRequest: (height: number) => host.requestResize?.(height),
@@ -70,7 +76,9 @@ function createActions<State>(host: NodeWidgetHost, actions: Omit<NodeWidgetActi
   } satisfies NodeWidgetActions<State>;
 }
 
-export function createNodeWidgetBridge<State>(component: NodeWidgetComponent<State>): NodeWidgetBridge<State> {
+export function createNodeWidgetBridge<State>(
+  component: NodeWidgetComponent<State>,
+): NodeWidgetBridge<State> {
   return {
     mount: (host, model, actions) => mountNodeWidget(component, host, model, actions),
   };
@@ -80,7 +88,9 @@ export function mountNodeWidget<State>(
   component: NodeWidgetComponent<State>,
   host: NodeWidgetHost,
   model: NodeWidgetModel<State>,
-  actions: Omit<NodeWidgetActions<State>, "onResizeRequest" | "onDirtyCanvas"> = { onChange: () => {} },
+  actions: Omit<NodeWidgetActions<State>, "onResizeRequest" | "onDirtyCanvas"> = {
+    onChange: () => {},
+  },
 ): NodeWidgetHandle<State> {
   unmountExisting(host.element);
 
@@ -101,10 +111,16 @@ export function mountNodeWidget<State>(
   };
 
   const render = () => {
-    root.render(createElement(StrictMode, null, createElement(component, {
-      ...currentModel,
-      ...createActions(host, actions),
-    })));
+    root.render(
+      createElement(
+        StrictMode,
+        null,
+        createElement(component, {
+          ...currentModel,
+          ...createActions(host, actions),
+        }),
+      ),
+    );
   };
 
   roots.set(host.element, record);

@@ -24,12 +24,23 @@ const compareText = (left: string, right: string) => {
 
 const normalizedText = (value: string) => value.trim().toLocaleLowerCase();
 
-export function filterPrompts(prompts: PromptRecord[], query = "", tags: string[] = []): PromptRecord[] {
+export function filterPrompts(
+  prompts: PromptRecord[],
+  query = "",
+  tags: string[] = [],
+): PromptRecord[] {
   const needle = normalizedText(query);
   const selectedTags = tags.map(normalizedText).filter(Boolean);
 
   return prompts.filter((prompt) => {
-    const searchable = [prompt.id, prompt.sourcePath, prompt.name, prompt.body, prompt.category, ...prompt.tags]
+    const searchable = [
+      prompt.id,
+      prompt.sourcePath,
+      prompt.name,
+      prompt.body,
+      prompt.category,
+      ...prompt.tags,
+    ]
       .join(" ")
       .toLocaleLowerCase();
     const matchesQuery = !needle || searchable.includes(needle);
@@ -84,7 +95,11 @@ export function buildPromptTree(prompts: PromptRecord[]): PromptTreeNode[] {
       }
       parent = folder;
     }
-    parent?.prompts.push({ kind: "prompt", prompt, sortKey: normalizeCollapseKey(prompt.sourcePath) });
+    parent?.prompts.push({
+      kind: "prompt",
+      prompt,
+      sortKey: normalizeCollapseKey(prompt.sourcePath),
+    });
   }
 
   return sortTreeNodes(roots);
@@ -92,9 +107,15 @@ export function buildPromptTree(prompts: PromptRecord[]): PromptTreeNode[] {
 
 function sortTreeNodes(nodes: PromptTreeNode[]): PromptTreeNode[] {
   return nodes
-    .map((node): PromptTreeNode => node.kind === "folder"
-      ? { ...node, folders: sortFolders(node.folders), prompts: [...node.prompts].sort((a, b) => compareText(a.sortKey, b.sortKey)) }
-      : node)
+    .map((node): PromptTreeNode =>
+      node.kind === "folder"
+        ? {
+            ...node,
+            folders: sortFolders(node.folders),
+            prompts: [...node.prompts].sort((a, b) => compareText(a.sortKey, b.sortKey)),
+          }
+        : node,
+    )
     .sort((left, right) => {
       if (left.kind !== right.kind) return left.kind === "prompt" ? -1 : 1;
       return compareText(left.sortKey, right.sortKey);
@@ -122,22 +143,27 @@ export function flattenPromptTree(tree: PromptTreeNode[]): PromptTreePrompt[] {
 }
 
 function isRelativePath(value: string, extension: string): boolean {
-  return value.endsWith(extension)
-    && !value.startsWith("/")
-    && !/^[A-Za-z]:[\\/]/.test(value)
-    && !value.startsWith("\\\\")
-    && !value.includes("\\")
-    && !value.split("/").some((part) => part === "" || part === "." || part === "..");
+  return (
+    value.endsWith(extension) &&
+    !value.startsWith("/") &&
+    !/^[A-Za-z]:[\\/]/.test(value) &&
+    !value.startsWith("\\\\") &&
+    !value.includes("\\") &&
+    !value.split("/").some((part) => part === "" || part === "." || part === "..")
+  );
 }
 
 export function validatePromptDraft(draft: PromptDraft): string[] {
   const errors: string[] = [];
   if (!isRelativePath(draft.sourcePath, ".md")) errors.push("sourcePath");
-  if (!isRelativePath(`${draft.id}.md`, ".md") || draft.id !== draft.sourcePath.slice(0, -3)) errors.push("id");
+  if (!isRelativePath(`${draft.id}.md`, ".md") || draft.id !== draft.sourcePath.slice(0, -3))
+    errors.push("id");
   if (!draft.name.trim()) errors.push("name");
-  if (!Array.isArray(draft.tags) || draft.tags.some((tag) => typeof tag !== "string")) errors.push("tags");
+  if (!Array.isArray(draft.tags) || draft.tags.some((tag) => typeof tag !== "string"))
+    errors.push("tags");
   if (draft.kind !== "text" && draft.kind !== "list") errors.push("kind");
-  if (draft.prefix !== undefined && draft.prefix !== "@" && draft.prefix !== "#") errors.push("prefix");
+  if (draft.prefix !== undefined && draft.prefix !== "@" && draft.prefix !== "#")
+    errors.push("prefix");
   return errors;
 }
 
